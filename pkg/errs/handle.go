@@ -1,32 +1,34 @@
 package errs
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 )
+
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
 
 func Handle(err error, stop bool) {
 	if err == nil {
 		return
 	}
 
-	type stackTracer interface {
-		StackTrace() errors.StackTrace
-	}
-
-	checkErr, ok := errors.Cause(err).(stackTracer)
+	var errWithStack stackTracer
+	ok := errors.As(err, &errWithStack)
 	if !ok {
 		if stop {
-			logging.Panic(err)
+			panic(err)
 		} else {
 			logging.Error(err)
 		}
 		return
 	}
 
-	st := checkErr.StackTrace()
+	st := errWithStack.StackTrace()
 	if stop {
-		logging.Panicf("%v\n%+v", err, st)
+		panic(fmt.Sprintf("%v\n%+v", err, st))
 	} else {
 		logging.Errorf("%v\n%+v", err, st)
 	}

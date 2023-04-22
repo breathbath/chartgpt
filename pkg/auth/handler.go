@@ -4,8 +4,11 @@ import (
 	"breathbathChartGPT/pkg/msg"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
+	logging "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
 	"time"
 )
 
@@ -35,20 +38,22 @@ func NewHandler(passHandler msg.Handler, storage Storage, cfg *Config) (*Handler
 
 func (a *Handler) findUserInConfig(userId string) *User {
 	for _, u := range a.cfg.Users {
-		if u.UserID == userId {
-			return &u
+		for _, id := range u.UserIDs {
+			if strings.ToLower(id) == strings.ToLower(userId) {
+				return &u
+			}
 		}
 	}
 
 	return nil
 }
 
-func (a *Handler) buildUserStorageKey(userId string) string {
-	return "auth_handler_user_id_" + userId
+func (a *Handler) buildUserStorageKey(userId, platformId string) string {
+	return fmt.Sprintf("auth_handler_%s_user_id_%s", strings.ToLower(platformId), strings.ToLower(userId))
 }
 
-func (a *Handler) findUserInStorage(ctx context.Context, userId string) (*User, error) {
-	userBytes, found, err := a.storage.Read(ctx, a.buildUserStorageKey(userId))
+func (a *Handler) findUserInStorage(ctx context.Context, userId, platformId string) (*User, error) {
+	userBytes, found, err := a.storage.Read(ctx, a.buildUserStorageKey(userId, platformId))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read data from storage")
 	}
@@ -66,16 +71,18 @@ func (a *Handler) findUserInStorage(ctx context.Context, userId string) (*User, 
 	return u, nil
 }
 
-func (a *Handler) writeUserToStorage(ctx context.Context, u *User) error {
+func (a *Handler) writeUserToStorage(ctx context.Context, userId, platform string, u *User) error {
 	rawBytes, err := json.Marshal(u)
 	if err != nil {
 		return errors.Wrapf(err, "failed to convert user to json")
 	}
 
-	return a.storage.Write(ctx, a.buildUserStorageKey(u.UserID), rawBytes, a.cfg.SessionDuration)
+	return a.storage.Write(ctx, a.buildUserStorageKey(userId, platform), rawBytes, a.cfg.SessionDuration)
 }
 
 func (a *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+	log := logging.WithContext(ctx)
+
 	if req.Message == "" {
 		return nil, nil
 	}
@@ -89,14 +96,15 @@ func (a *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 		return nil, errors.Errorf("user with the provided id %q is not configured", req.Sender.GetID())
 	}
 
-	userFromStorage, err := a.findUserInStorage(ctx, req.Sender.GetID())
+	userFromStorage, err := a.findUserInStorage(ctx, req.Sender.GetID(), req.Source)
 	if err != nil {
 		return nil, err
 	}
 
 	if req.Message == "/auth" {
+		log.Infof("auth command received, expecting password from prompt")
 		userFromConfig.State = UserReadyToBeVerified
-		err = a.writeUserToStorage(ctx, userFromConfig)
+		err = a.writeUserToStorage(ctx, req.Sender.GetID(), req.Source, userFromConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -111,6 +119,7 @@ func (a *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 	}
 
 	if userFromStorage == nil || userFromStorage.State == UserUnverified {
+		log.Infof("user is not authenticated and didn't receive auth command, waiting for a valid password")
 		return &msg.Response{
 			Messages: []msg.ResponseMessage{
 				{
@@ -125,9 +134,12 @@ func (a *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 	}
 
 	if userFromStorage.State == UserReadyToBeVerified {
+		log.Infof("checking password for user %q", req.Sender.GetID())
+
 		if a.checkPassword(req.Message, userFromConfig) {
+			log.Infof("password for user %q is correct", req.Sender.GetID())
 			userFromConfig.State = UserVerified
-			err = a.writeUserToStorage(ctx, userFromConfig)
+			err = a.writeUserToStorage(ctx, req.Sender.GetID(), req.Source, userFromConfig)
 			if err != nil {
 				return nil, err
 			}
@@ -140,6 +152,8 @@ func (a *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 				},
 			}, nil
 		}
+		log.Infof("password %q for user %q is incorrect, expecting another password", req.Message, req.Sender.GetID())
+
 		return &msg.Response{
 			Messages: []msg.ResponseMessage{
 				{

@@ -22,6 +22,8 @@ var telegramCmd = &cobra.Command{
 		}
 		go bot.Start()
 
+		logging.Info("started telegram bot")
+
 		waitForSignal(bot)
 
 		return nil

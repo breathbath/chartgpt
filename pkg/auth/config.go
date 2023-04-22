@@ -67,7 +67,7 @@ func LoadConfig() (*Config, error) {
 
 	cfg, convErr := rawCfg.ToConfig()
 	if convErr.HasErrors() {
-		return nil, err
+		return nil, convErr
 	}
 
 	return cfg, nil

@@ -39,7 +39,12 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 	sender := new(msg.Sender)
 	telegramSender := telegramMsg.Sender()
 	if telegramSender != nil {
-		sender.ID = fmt.Sprint(telegramSender.ID)
+		id := telegramSender.Username
+		if id == "" {
+			id = fmt.Sprint(telegramSender.ID)
+		}
+
+		sender.ID = id
 		sender.LastName = telegramSender.LastName
 		sender.FirstName = telegramSender.FirstName
 	}
@@ -56,7 +61,7 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 	}
 }
 
-func (b *Bot) processMessage(
+func (b *Bot) processResponseMessage(
 	telegramMsg telebot.Context,
 	respMsg msg.ResponseMessage,
 	keyboard *telebot.ReplyMarkup,
@@ -108,10 +113,14 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 
 	resp, err := b.msgHandler.Handle(ctx, req)
 	if err != nil {
-		log.Errorf("failed to process message: %v", err)
-		_, err = b.baseBot.Send(c.Sender(), "Unexpected error", &telebot.SendOptions{})
+		_, sendErr := b.baseBot.Send(c.Sender(), "Unexpected error", &telebot.SendOptions{})
+		if sendErr != nil {
+			log.Errorf("failed to send error message to the sender: %v", sendErr)
+		}
+
 		return err
 	}
+
 	if resp == nil || len(resp.Messages) == 0 {
 		log.Info("message is ignored")
 		return nil
@@ -122,14 +131,14 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 	}
 
 	for _, respMsg := range resp.Messages {
-		err := b.processMessage(c, respMsg, keyboard)
+		err := b.processResponseMessage(c, respMsg, keyboard)
 		if err != nil {
 			return err
 		}
 	}
 
 	if len(keyboard.InlineKeyboard) > 0 {
-		log.Infof("will send prompt options: %q", keyboard.InlineKeyboard)
+		log.Infof("will send prompt options: %v", keyboard.InlineKeyboard)
 		_, err := b.baseBot.Send(c.Message().Chat, "here are some options", keyboard)
 		if err != nil {
 			return err
@@ -151,5 +160,7 @@ func (b *Bot) Start() {
 }
 
 func (b *Bot) Stop() {
+	logging.Info("will stop telegram bot")
 	b.baseBot.Stop()
+	logging.Info("stopped telegram bot")
 }

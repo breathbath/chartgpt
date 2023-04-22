@@ -48,6 +48,21 @@ func (m *Multi) Error() string {
 	return strings.Join(strErrs, "; ")
 }
 
+func (m *Multi) StackTrace() errors.StackTrace {
+	if !m.HasErrors() {
+		return nil
+	}
+	for _, curErr := range m.errors {
+		var errWithStack stackTracer
+		ok := errors.As(curErr, &errWithStack)
+		if ok {
+			return errWithStack.StackTrace()
+		}
+	}
+
+	return errors.StackTrace{}
+}
+
 func (m *Multi) HasErrors() bool {
 	return len(m.errors) > 0
 }

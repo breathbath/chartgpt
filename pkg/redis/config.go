@@ -3,6 +3,7 @@ package redis
 import (
 	"breathbathChartGPT/pkg/errs"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/pkg/errors"
 )
 
 type Config struct {
@@ -21,9 +22,10 @@ func (c *Config) Validate() *errs.Multi {
 }
 
 func LoadConfig() (cfg *Config, err error) {
+	cfg = new(Config)
 	err = envconfig.Process("redis", cfg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to load redis config")
 	}
 
 	return cfg, nil

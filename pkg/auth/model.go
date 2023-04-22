@@ -12,7 +12,7 @@ const (
 
 type User struct {
 	Role         string    `json:"role"`
-	UserID       string    `json:"user_id"`
+	UserIDs      []string  `json:"user_ids"`
 	PasswordHash string    `json:"password_hash"`
 	State        UserState `json:"state"`
 }
@@ -22,8 +22,8 @@ func (u User) ValidateAsConfig() error {
 	if u.Role == "" {
 		multiErr.Err("role field cannot be empty in one of users in AUTH_USERS")
 	}
-	if u.UserID == "" {
-		multiErr.Err("user_id field cannot be empty in one of users in AUTH_USERS")
+	if len(u.UserIDs) == 0 {
+		multiErr.Err("user_ids field cannot be empty in one of users in AUTH_USERS")
 	}
 	if u.PasswordHash == "" {
 		multiErr.Err("password_hash field cannot be empty in one of users in AUTH_USERS")

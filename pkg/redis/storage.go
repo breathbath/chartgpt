@@ -5,6 +5,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
 	base "github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -26,9 +27,11 @@ func NewStorage(cfg *Config) (*Storage, error) {
 
 	redisCheckErr := checkRedis(rdb)
 	if redisCheckErr != nil {
+		logrus.Errorf("failed to ping redis %q", cfg.Addr)
 		return nil, redisCheckErr
 	}
 
+	logrus.Infof("ping to redis %q is successful", cfg.Addr)
 	return &Storage{baseClient: rdb}, nil
 }
 
@@ -50,17 +53,35 @@ func checkRedis(cl *base.Client) error {
 }
 
 func (s *Storage) Read(ctx context.Context, key string) (raw []byte, found bool, err error) {
+	log := logrus.WithContext(ctx)
+
+	log.Infof("will read from redis data at key %q", key)
+
 	val, err := s.baseClient.Get(ctx, key).Result()
+
 	if err != nil {
 		if err == base.Nil {
+			log.Infof("nothing found in redis under key %q", key)
 			return nil, false, nil
 		}
-		return nil, false, err
+		return nil, false, errors.Wrapf(err, "failed to get data from redis under key %q", key)
 	}
+
+	log.Infof("got data from redis under key %q", key)
 
 	return []byte(val), true, nil
 }
 
 func (s *Storage) Write(ctx context.Context, key string, raw []byte, exp time.Duration) error {
-	return s.baseClient.Set(ctx, key, raw, exp).Err()
+	log := logrus.WithContext(ctx)
+	log.Infof("will write data to redis at key %q", key)
+
+	err := s.baseClient.Set(ctx, key, raw, exp).Err()
+	if err != nil {
+		return errors.Wrapf(err, "failed to write data to redis under key %q", key)
+	}
+
+	log.Infof("wrote data to redis under key %q", key)
+
+	return nil
 }
