@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	err := godotenv.Overload(".env.default", ".env")
+	err := godotenv.Overload(".env.default", ".env.secret", ".env.local")
 	errs.Handle(err, true)
 
 	err = cmd.Execute()
