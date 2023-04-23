@@ -49,55 +49,63 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 		sender.FirstName = telegramSender.FirstName
 	}
 
+	var conversationID int64
+	chat := telegramMsg.Chat()
+	if chat != nil {
+		conversationID = chat.ID
+	}
+
 	return &msg.Request{
 		Source:  "telegram",
 		ID:      fmt.Sprint(telegramMsg.Message().ID),
 		Sender:  sender,
 		Message: telegramMsg.Text(),
 		Meta: map[string]interface{}{
-			"payload":   telegramMsg.Message().Payload,
-			"timestamp": telegramMsg.Message().Unixtime,
+			"payload":         telegramMsg.Message().Payload,
+			"timestamp":       telegramMsg.Message().Unixtime,
+			"conversation_id": conversationID,
 		},
 	}
 }
 
 func (b *Bot) processResponseMessage(
+	ctx context.Context,
 	telegramMsg telebot.Context,
-	respMsg msg.ResponseMessage,
-	keyboard *telebot.ReplyMarkup,
+	resp *msg.Response,
 ) error {
-	if respMsg.Message == "" {
+	log := logging.WithContext(ctx)
+
+	if resp == nil || resp.Message == "" {
+		log.Info("response message is empty, will send nothing to the sender")
 		return nil
 	}
 
 	var err error
-	switch respMsg.Type {
+	switch resp.Type {
 	case msg.Success:
-		_, err = b.baseBot.Send(telegramMsg.Sender(), respMsg.Message, &telebot.SendOptions{})
+		_, err = b.baseBot.Send(telegramMsg.Sender(), resp.Message, &telebot.SendOptions{})
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "failed to send success message: %s", resp.Message)
+		}
+
+		if _, ok := resp.Meta["is_hidden_message"]; ok {
+			originalMsg := telegramMsg.Message()
+			deleteErr := b.baseBot.Delete(originalMsg)
+			if deleteErr != nil {
+				log.Errorf("failed to delete user message %d: %v", originalMsg.ID, deleteErr)
+			} else {
+				log.Infof("deleted user message %d as it contained a sensitive data", originalMsg.ID)
+			}
 		}
 	case msg.Error:
 		_, err = b.baseBot.Send(
 			telegramMsg.Sender(),
-			fmt.Sprintf(`<font color="red">%s</font>`, respMsg.Message),
-			&telebot.SendOptions{
-				ParseMode: telebot.ModeHTML,
-			},
+			`❗`+resp.Message+`❗`,
 		)
 
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "failed to send error message: %s", resp.Message)
 		}
-	case msg.Prompt:
-		if len(keyboard.InlineKeyboard) == 0 {
-			keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, []telebot.InlineButton{})
-		}
-
-		keyboard.InlineKeyboard[0] = append(keyboard.InlineKeyboard[0], telebot.InlineButton{
-			Text: respMsg.Message,
-			Data: fmt.Sprint(respMsg.Meta["data"]),
-		})
 	}
 
 	return nil
@@ -106,7 +114,6 @@ func (b *Bot) processResponseMessage(
 func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 	log := logging.WithContext(ctx)
 
-	log = log.WithField("message.id", fmt.Sprintf("%d_%d", c.Chat().ID, c.Message().ID))
 	log.Infof("got telegram message: %q", c.Text())
 
 	req := b.botMsgToRequest(c)
@@ -121,28 +128,9 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 		return err
 	}
 
-	if resp == nil || len(resp.Messages) == 0 {
-		log.Info("message is ignored")
-		return nil
-	}
-
-	keyboard := &telebot.ReplyMarkup{
-		InlineKeyboard: [][]telebot.InlineButton{},
-	}
-
-	for _, respMsg := range resp.Messages {
-		err := b.processResponseMessage(c, respMsg, keyboard)
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(keyboard.InlineKeyboard) > 0 {
-		log.Infof("will send prompt options: %v", keyboard.InlineKeyboard)
-		_, err := b.baseBot.Send(c.Message().Chat, "here are some options", keyboard)
-		if err != nil {
-			return err
-		}
+	err = b.processResponseMessage(ctx, c, resp)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -150,6 +138,15 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 
 func (b *Bot) Start() {
 	b.baseBot.Handle(telebot.OnText, func(c telebot.Context) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		return b.handle(ctx, c)
+	})
+
+	b.baseBot.Handle(&telebot.InlineButton{
+		Unique: "",
+	}, func(c telebot.Context) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 

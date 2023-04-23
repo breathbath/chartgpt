@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 
 	logging "github.com/sirupsen/logrus"
 )
@@ -29,6 +30,49 @@ func NewHandler(cfg *Config) (*Handler, error) {
 	return &Handler{
 		cfg: cfg,
 	}, nil
+}
+
+func (h *Handler) addHeaders(httpReq *http.Request) {
+	httpReq.Header.Set("Authorization", "Bearer "+h.cfg.ApiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+}
+
+func (h *Handler) request(ctx context.Context, httpReq *http.Request, target interface{}) (err error) {
+	log := logging.WithContext(ctx)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	dump, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		log.Warnf("failed to dump response: %v", err)
+	} else {
+		log.Infof("response: %q", string(dump))
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return errors.New("bad response code from ChartGPT")
+	}
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("failed to read response body: %v", err)
+		return errors.New("failed to read ChartGPT response")
+	}
+
+	err = json.Unmarshal(responseBody, target)
+	if err != nil {
+		log.Errorf("failed to pack response data into ChatCompletionResponse model: %v", err)
+		return errors.New("failed to interpret ChartGPT response")
+	}
+
+	return nil
 }
 
 func (h *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -58,69 +102,36 @@ func (h *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 
 	log.Infof("will do chartgpt request, url: %q, method: %s, body: %q", CompletionsURL, method, requestBody)
 
-	httpReq.Header.Set("Authorization", "Bearer "+h.cfg.ApiKey)
-	httpReq.Header.Set("Content-Type", "application/json")
+	h.addHeaders(httpReq)
 
-	client := &http.Client{}
+	chartResp := new(ChatCompletionResponse)
 
-	resp, err := client.Do(httpReq)
+	err = h.request(ctx, httpReq, chartResp)
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
-
-	dump, err := httputil.DumpResponse(resp, true)
-	if err != nil {
-		log.Warnf("failed to dump response: %v", err)
-	} else {
-		log.Infof("response: %q", string(dump))
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, errors.New("bad response code from ChartGPT")
-	}
-
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("failed to read response body: %v", err)
-		return nil, errors.New("failed to read ChartGPT response")
-	}
-
-	chartResp := new(ChatCompletionResponse)
-	err = json.Unmarshal(responseBody, chartResp)
-	if err != nil {
-		log.Errorf("failed to pack response data into ChatCompletionResponse model: %v", err)
-		return nil, errors.New("failed to interpret ChartGPT response")
-	}
-
-	respToGive := &msg.Response{
-		Messages: []msg.ResponseMessage{},
-	}
+	messages := make([]string, 0, len(chartResp.Choices))
 	for _, choice := range chartResp.Choices {
 		if choice.Message.Content == "" {
 			continue
 		}
 
-		respToGive.Messages = append(respToGive.Messages, msg.ResponseMessage{
-			Message: choice.Message.Content,
-			Type:    msg.Success,
-			Meta: map[string]interface{}{
-				"created": chartResp.CreatedAt,
-			},
-		})
+		messages = append(messages, choice.Message.Content)
 	}
 
-	if len(respToGive.Messages) == 0 {
+	if len(messages) == 0 {
 		return &msg.Response{
-			Messages: []msg.ResponseMessage{
-				{
-					Message: "failed to interpret ChartGPT response",
-					Type:    msg.Error,
-				},
-			},
+			Message: "Didn't get any response from ChartGPT",
+			Type:    msg.Error,
 		}, nil
 	}
 
-	return respToGive, nil
+	return &msg.Response{
+		Message: strings.Join(messages, "/n"),
+		Type:    msg.Success,
+		Meta: map[string]interface{}{
+			"created": chartResp.CreatedAt,
+		},
+	}, nil
 }

@@ -55,8 +55,6 @@ func checkRedis(cl *base.Client) error {
 func (s *Storage) Read(ctx context.Context, key string) (raw []byte, found bool, err error) {
 	log := logrus.WithContext(ctx)
 
-	log.Infof("will read from redis data at key %q", key)
-
 	val, err := s.baseClient.Get(ctx, key).Result()
 
 	if err != nil {
@@ -74,7 +72,6 @@ func (s *Storage) Read(ctx context.Context, key string) (raw []byte, found bool,
 
 func (s *Storage) Write(ctx context.Context, key string, raw []byte, exp time.Duration) error {
 	log := logrus.WithContext(ctx)
-	log.Infof("will write data to redis at key %q", key)
 
 	err := s.baseClient.Set(ctx, key, raw, exp).Err()
 	if err != nil {
@@ -83,5 +80,18 @@ func (s *Storage) Write(ctx context.Context, key string, raw []byte, exp time.Du
 
 	log.Infof("wrote data to redis under key %q", key)
 
+	return nil
+}
+
+func (s *Storage) Delete(ctx context.Context, key string) error {
+	log := logrus.WithContext(ctx)
+
+	err := s.baseClient.Del(ctx, key).Err()
+
+	if err != nil {
+		return errors.Wrapf(err, "failed to delete data from redis under key %q", key)
+	}
+
+	log.Infof("deleted data from redis under key %q", key)
 	return nil
 }

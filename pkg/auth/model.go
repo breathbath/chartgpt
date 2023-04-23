@@ -6,18 +6,22 @@ type UserState uint
 
 const (
 	UserUnverified UserState = iota
-	UserReadyToBeVerified
 	UserVerified
 )
 
-type User struct {
-	Role         string    `json:"role"`
-	UserIDs      []string  `json:"user_ids"`
-	PasswordHash string    `json:"password_hash"`
-	State        UserState `json:"state"`
+type CachedUser struct {
+	Id       string    `json:"id"`
+	State    UserState `json:"state"`
+	Platform string    `json:"platform"`
 }
 
-func (u User) ValidateAsConfig() error {
+type ConfiguredUser struct {
+	Role         string   `json:"role"`
+	UserIDs      []string `json:"user_ids"`
+	PasswordHash string   `json:"password_hash"`
+}
+
+func (u ConfiguredUser) Validate() error {
 	multiErr := errs.NewMulti()
 	if u.Role == "" {
 		multiErr.Err("role field cannot be empty in one of users in AUTH_USERS")

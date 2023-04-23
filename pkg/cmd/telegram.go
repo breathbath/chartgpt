@@ -3,6 +3,7 @@ package cmd
 import (
 	"breathbathChartGPT/pkg/auth"
 	"breathbathChartGPT/pkg/chartgpt"
+	"breathbathChartGPT/pkg/msg"
 	"breathbathChartGPT/pkg/redis"
 	"breathbathChartGPT/pkg/telegram"
 	logging "github.com/sirupsen/logrus"
@@ -55,7 +56,11 @@ func buildTelegram() (*telegram.Bot, error) {
 		return nil, err
 	}
 
-	authHandler, err := auth.BuildHandler(chartgptMsgHandler, storage)
+	commandsHandler := &msg.CommandsHandler{
+		PassHandler: chartgptMsgHandler,
+	}
+
+	authHandler, err := auth.BuildHandler(commandsHandler, storage)
 	if err != nil {
 		return nil, err
 	}

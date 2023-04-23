@@ -28,16 +28,10 @@ const (
 	Undefined Type = iota
 	Success
 	Error
-	Prompt
 )
 
-type ResponseMessage struct {
+type Response struct {
 	Message string
 	Type    Type
 	Meta    map[string]interface{}
-}
-
-type Response struct {
-	Messages []ResponseMessage
-	Meta     map[string]interface{}
 }

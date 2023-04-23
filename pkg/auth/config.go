@@ -15,7 +15,7 @@ type RawConfig struct {
 
 type Config struct {
 	SessionDuration time.Duration
-	Users           []User
+	Users           []ConfiguredUser
 }
 
 func (c *Config) Validate() *errs.Multi {
@@ -25,7 +25,7 @@ func (c *Config) Validate() *errs.Multi {
 	}
 
 	for _, u := range c.Users {
-		multiErr.Add(u.ValidateAsConfig())
+		multiErr.Add(u.Validate())
 	}
 
 	return multiErr
@@ -46,7 +46,7 @@ func (rc *RawConfig) ToConfig() (*Config, *errs.Multi) {
 	}
 
 	if rc.Users != "" {
-		usersFromConfig := []User{}
+		usersFromConfig := []ConfiguredUser{}
 		err := json.Unmarshal([]byte(rc.Users), &usersFromConfig)
 		if err != nil {
 			multiErr.Add(errors.Wrapf(err, "failed to parse users from JSON format %q", rc.Users))
