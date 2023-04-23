@@ -132,6 +132,7 @@ func (h *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 		Type:    msg.Success,
 		Meta: map[string]interface{}{
 			"created": chartResp.CreatedAt,
+			"format":  "md",
 		},
 	}, nil
 }

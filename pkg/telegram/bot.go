@@ -68,6 +68,22 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 	}
 }
 
+func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
+	formatI, ok := resp.Meta["format"]
+	if !ok {
+		return telebot.ModeDefault
+	}
+
+	switch fmt.Sprint(formatI) {
+	case "md":
+		return telebot.ModeMarkdownV2
+	case "html":
+		return telebot.ModeHTML
+	default:
+		return telebot.ModeDefault
+	}
+}
+
 func (b *Bot) processResponseMessage(
 	ctx context.Context,
 	telegramMsg telebot.Context,
@@ -80,10 +96,16 @@ func (b *Bot) processResponseMessage(
 		return nil
 	}
 
+	senderOpts := &telebot.SendOptions{
+		ParseMode: b.guessParseMode(resp),
+	}
+
+	log.Infof("sender options: %+v", senderOpts)
+
 	var err error
 	switch resp.Type {
 	case msg.Success:
-		_, err = b.baseBot.Send(telegramMsg.Sender(), resp.Message, &telebot.SendOptions{})
+		_, err = b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
 		if err != nil {
 			return errors.Wrapf(err, "failed to send success message: %s", resp.Message)
 		}
@@ -101,6 +123,7 @@ func (b *Bot) processResponseMessage(
 		_, err = b.baseBot.Send(
 			telegramMsg.Sender(),
 			`❗`+resp.Message+`❗`,
+			senderOpts,
 		)
 
 		if err != nil {

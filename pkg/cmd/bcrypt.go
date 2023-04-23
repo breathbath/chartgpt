@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh/terminal"
@@ -15,12 +16,12 @@ var bcryptCmd = &cobra.Command{
 		fmt.Print("Enter password: ")
 		password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		fmt.Println(string(hashedPassword))
