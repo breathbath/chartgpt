@@ -12,6 +12,7 @@ var rootCmd = &cobra.Command{
 func Execute() error {
 	initVersionCmd()
 	initTelegramCmd()
+	initBcryptCmd()
 
 	return rootCmd.Execute()
 }
