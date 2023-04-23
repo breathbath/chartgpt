@@ -76,7 +76,7 @@ func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
 
 	switch fmt.Sprint(formatI) {
 	case "md":
-		return telebot.ModeMarkdownV2
+		return telebot.ModeMarkdown
 	case "html":
 		return telebot.ModeHTML
 	default:
@@ -107,7 +107,7 @@ func (b *Bot) processResponseMessage(
 	case msg.Success:
 		_, err = b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
 		if err != nil {
-			return errors.Wrapf(err, "failed to send success message: %s", resp.Message)
+			return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
 		}
 
 		if _, ok := resp.Meta["is_hidden_message"]; ok {
