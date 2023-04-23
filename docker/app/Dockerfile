@@ -11,7 +11,7 @@ COPY . .
 ARG version
 RUN echo "Version $version"
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+RUN go build -a -installsuffix cgo \
         -o /build/chartgpt/chartgpt \
         -ldflags \
         "-X breathbathChartGPT/pkg/cmd.Version=$version" \
