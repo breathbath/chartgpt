@@ -30,5 +30,6 @@ USER app:app
 
 COPY --from=build-env /build/chartgpt/chartgpt /app/
 COPY .env.default /app/.env.default
-COPY .env /app/.env
+COPY .env.secret /app/.env.secret
+COPY .env.local /app/.env.local
 CMD /app/chartgpt telegram
