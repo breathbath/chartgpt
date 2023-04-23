@@ -1,0 +1,18 @@
+version: '3.3'
+services:
+  chartgpt:
+    container_name: chartgpt
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile
+    depends_on:
+      - redis
+    restart: always
+    entrypoint: /app/chartgpt telegram
+  redis:
+    image: redis:alpine
+    container_name: redis
+    volumes:
+      - ./DockerData/redis:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    entrypoint: redis-server --appendonly yes

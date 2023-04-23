@@ -36,12 +36,19 @@ func NewStorage(cfg *Config) (*Storage, error) {
 }
 
 func checkRedis(cl *base.Client) error {
+	logrus.Infof("will ping redis")
 	operation := func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		status := cl.Ping(ctx)
-		return status.Err()
+		err := status.Err()
+		if err != nil {
+			logrus.Errorf("Failed to connect to redis: %v", err)
+			return err
+		}
+
+		return nil
 	}
 
 	err := backoff.Retry(operation, backoff.NewExponentialBackOff())
