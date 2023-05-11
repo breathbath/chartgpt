@@ -1,31 +1,24 @@
 package auth
 
 import (
-	"breathbathChartGPT/pkg/errs"
-	"breathbathChartGPT/pkg/msg"
+	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/storage"
+	"breathbathChatGPT/pkg/utils"
 	"context"
-	"encoding/json"
-	"fmt"
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"strings"
-	"time"
 )
-
-type Storage interface {
-	Read(ctx context.Context, key string) (raw []byte, found bool, err error)
-	Write(ctx context.Context, key string, raw []byte, exp time.Duration) error
-	Delete(ctx context.Context, key string) error
-}
 
 type Handler struct {
 	passHandler msg.Handler
-	storage     Storage
+	db          storage.Client
 	cfg         *Config
 }
 
-func NewHandler(passHandler msg.Handler, storage Storage, cfg *Config) (*Handler, error) {
+func NewHandler(passHandler msg.Handler, db storage.Client, cfg *Config) (*Handler, error) {
 	err := cfg.Validate()
 	if err.HasErrors() {
 		return nil, err
@@ -33,7 +26,7 @@ func NewHandler(passHandler msg.Handler, storage Storage, cfg *Config) (*Handler
 
 	return &Handler{
 		passHandler: passHandler,
-		storage:     storage,
+		db:          db,
 		cfg:         cfg,
 	}, nil
 }
@@ -51,16 +44,13 @@ func (h *Handler) findUserInConfig(userId string) *ConfiguredUser {
 }
 
 func (h *Handler) buildUserStorageKey(req *msg.Request) string {
-	conversationIdI, ok := req.Meta["conversation_id"]
-	conversationId := ""
-	if ok {
-		conversationId = fmt.Sprint(conversationIdI)
-	}
-	return fmt.Sprintf("%s/%s/%s", strings.ToLower(req.Source), conversationId, strings.ToLower(req.Sender.GetID()))
+	return "auth/" + req.GetConversationId()
 }
 
 func (h *Handler) findUserInStorage(ctx context.Context, cacheKey string) (*CachedUser, error) {
-	userBytes, found, err := h.storage.Read(ctx, cacheKey)
+	u := new(CachedUser)
+	found, err := h.db.Load(ctx, cacheKey, u)
+
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read data from storage")
 	}
@@ -69,22 +59,13 @@ func (h *Handler) findUserInStorage(ctx context.Context, cacheKey string) (*Cach
 		return nil, nil
 	}
 
-	u := new(CachedUser)
-	err = json.Unmarshal(userBytes, u)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to convert %q to user model", string(userBytes))
-	}
-
 	return u, nil
 }
 
 func (h *Handler) writeUserToStorage(ctx context.Context, cacheKey string, u *CachedUser) error {
-	rawBytes, err := json.Marshal(u)
-	if err != nil {
-		return errors.Wrapf(err, "failed to convert user to json")
-	}
+	ctxValue := context.WithValue(ctx, storage.IsNotLoggableContentCtxKey, true)
 
-	return h.storage.Write(ctx, cacheKey, rawBytes, h.cfg.SessionDuration)
+	return h.db.Save(ctxValue, cacheKey, u, h.cfg.SessionDuration)
 }
 
 func (h *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -115,7 +96,7 @@ func (h *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, 
 		return h.handleNotVerifiedUser(ctx, req, userFromConfig, cacheKey)
 	}
 
-	if msg.MatchCommand(req.Message, []string{"logout"}) {
+	if utils.MatchesAny(req.Message, msg.CommandPrefix, []string{"logout"}) {
 		return h.handleLogout(ctx, cacheKey)
 	}
 
@@ -126,7 +107,7 @@ func (h *Handler) handleLogout(ctx context.Context, cacheKey string) (*msg.Respo
 	log := logging.WithContext(ctx)
 	log.Infof("got logout command, will logout current user")
 
-	err := h.storage.Delete(ctx, cacheKey)
+	err := h.db.Delete(ctx, cacheKey)
 
 	if err != nil {
 		errs.Handle(err, false)
@@ -164,7 +145,7 @@ func (h *Handler) handleNotVerifiedUser(
 	cachedUser := &CachedUser{
 		Id:       req.Sender.GetID(),
 		State:    UserVerified,
-		Platform: req.Source,
+		Platform: req.Platform,
 	}
 
 	err := h.writeUserToStorage(ctx, cacheKey, cachedUser)

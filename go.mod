@@ -1,4 +1,4 @@
-module breathbathChartGPT
+module breathbathChatGPT
 
 go 1.20
 

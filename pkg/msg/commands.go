@@ -1,26 +1,29 @@
 package msg
 
 import (
+	"breathbathChatGPT/pkg/utils"
 	"context"
 	"fmt"
+	"strings"
 )
 
 const CommandPrefix = "/"
 
 type CommandsHandler struct {
 	PassHandler Handler
+	DynamicHelp string
 }
 
 func (ch *CommandsHandler) Handle(ctx context.Context, req *Request) (*Response, error) {
-	if !IsCommand(req.Message) {
+	if !strings.HasPrefix(req.Message, CommandPrefix) {
 		return ch.PassHandler.Handle(ctx, req)
 	}
 
-	if MatchCommand(req.Message, []string{"help"}) {
+	if utils.MatchesAny(req.Message, CommandPrefix, []string{"help"}) {
 		return ch.handleHelp(ctx, req)
 	}
 
-	if MatchCommand(req.Message, []string{"start"}) {
+	if utils.MatchesAny(req.Message, CommandPrefix, []string{"start"}) {
 		return ch.handleStart(ctx, req)
 	}
 
@@ -28,12 +31,13 @@ func (ch *CommandsHandler) Handle(ctx context.Context, req *Request) (*Response,
 }
 
 func (ch *CommandsHandler) handleHelp(ctx context.Context, req *Request) (*Response, error) {
-	return &Response{
-		Message: `list of available commands:
+	msg := `list of available commands:
 /logout to logout the current user
 /help to show this help
-`,
-		Type: Success,
+`
+	return &Response{
+		Message: msg + "\n" + ch.DynamicHelp,
+		Type:    Success,
 	}, nil
 }
 

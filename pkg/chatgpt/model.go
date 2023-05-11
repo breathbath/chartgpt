@@ -1,4 +1,6 @@
-package chartgpt
+package chatgpt
+
+import "encoding/json"
 
 type ChatCompletionResponse struct {
 	Id         string                   `json:"id"`
@@ -25,6 +27,14 @@ type ChatCompletionLogprobs struct {
 	TopLogprobs   []interface{} `json:"top_logprobs"`
 }
 
+type Role string
+
+const (
+	RoleSystem    Role = "system"
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+)
+
 type ChatCompletionMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -45,4 +55,59 @@ type ChatCompletionUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+type ConfiguredModel struct {
+	Model string `json:"model"`
+}
+
+func (m *ConfiguredModel) GetName() string {
+	if m == nil {
+		return ""
+	}
+
+	return m.Model
+}
+
+type ModelsResponse struct {
+	Models []Model `json:"data"`
+	Object string  `json:"object"`
+}
+
+type Model struct {
+	ID         string          `json:"id"`
+	Object     string          `json:"object"`
+	Owner      string          `json:"owned_by"`
+	Permission json.RawMessage `json:"permission"`
+}
+
+type ConversationMessage struct {
+	Role      Role
+	Text      string
+	CreatedAt int64
+}
+
+type Conversation struct {
+	ID       string
+	Context  string
+	Messages []ConversationMessage
+}
+
+func (c Conversation) ToRaw() []map[string]interface{} {
+	convResp := []map[string]interface{}{}
+	if c.Context != "" {
+		convResp = append(convResp, map[string]interface{}{
+			"role":    RoleSystem,
+			"content": c.Context,
+		})
+	}
+
+	for _, convMsg := range c.Messages {
+		convResp = append(convResp, map[string]interface{}{
+			"role":    convMsg.Role,
+			"content": convMsg.Text,
+		})
+	}
+
+	return convResp
 }

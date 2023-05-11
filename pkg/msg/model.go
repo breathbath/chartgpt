@@ -1,5 +1,10 @@
 package msg
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Sender struct {
 	ID        string
 	FirstName string
@@ -15,11 +20,21 @@ func (s *Sender) GetID() string {
 }
 
 type Request struct {
-	Source  string
-	ID      string
-	Sender  *Sender
-	Message string
-	Meta    map[string]interface{}
+	Platform string
+	ID       string
+	Sender   *Sender
+	Message  string
+	Meta     map[string]interface{}
+}
+
+func (r Request) GetConversationId() string {
+	conversationIdI, ok := r.Meta["conversation_id"]
+	conversationId := ""
+	if ok {
+		conversationId = fmt.Sprint(conversationIdI)
+	}
+
+	return fmt.Sprintf("%s/%s/%s", strings.ToLower(r.Platform), conversationId, strings.ToLower(r.Sender.GetID()))
 }
 
 type Type uint

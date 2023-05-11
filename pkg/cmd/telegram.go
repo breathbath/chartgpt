@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"breathbathChartGPT/pkg/auth"
-	"breathbathChartGPT/pkg/chartgpt"
-	"breathbathChartGPT/pkg/msg"
-	"breathbathChartGPT/pkg/redis"
-	"breathbathChartGPT/pkg/telegram"
+	"breathbathChatGPT/pkg/auth"
+	"breathbathChatGPT/pkg/chatgpt"
+	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/storage"
+	"breathbathChatGPT/pkg/telegram"
 	logging "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
@@ -46,21 +46,22 @@ func waitForSignal(server *telegram.Bot) {
 }
 
 func buildTelegram() (*telegram.Bot, error) {
-	chartgptMsgHandler, err := chartgpt.BuildHandler()
+	db, err := storage.BuildRedisClient()
 	if err != nil {
 		return nil, err
 	}
 
-	storage, err := redis.BuildStorage()
+	chatgptMsgHandler, handlerHelp, err := chatgpt.BuildChatCompletionHandler(db)
 	if err != nil {
 		return nil, err
 	}
 
 	commandsHandler := &msg.CommandsHandler{
-		PassHandler: chartgptMsgHandler,
+		PassHandler: chatgptMsgHandler,
+		DynamicHelp: handlerHelp,
 	}
 
-	authHandler, err := auth.BuildHandler(commandsHandler, storage)
+	authHandler, err := auth.BuildHandler(commandsHandler, db)
 	if err != nil {
 		return nil, err
 	}

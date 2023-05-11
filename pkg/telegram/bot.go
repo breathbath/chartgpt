@@ -1,8 +1,8 @@
 package telegram
 
 import (
-	"breathbathChartGPT/pkg/errs"
-	"breathbathChartGPT/pkg/msg"
+	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
@@ -56,10 +56,10 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 	}
 
 	return &msg.Request{
-		Source:  "telegram",
-		ID:      fmt.Sprint(telegramMsg.Message().ID),
-		Sender:  sender,
-		Message: telegramMsg.Text(),
+		Platform: "telegram",
+		ID:       fmt.Sprint(telegramMsg.Message().ID),
+		Sender:   sender,
+		Message:  telegramMsg.Text(),
 		Meta: map[string]interface{}{
 			"payload":         telegramMsg.Message().Payload,
 			"timestamp":       telegramMsg.Message().Unixtime,
@@ -77,6 +77,8 @@ func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
 	switch fmt.Sprint(formatI) {
 	case "md":
 		return telebot.ModeMarkdown
+	case "md2":
+		return telebot.ModeMarkdownV2
 	case "html":
 		return telebot.ModeHTML
 	default:
@@ -100,7 +102,8 @@ func (b *Bot) processResponseMessage(
 		ParseMode: b.guessParseMode(resp),
 	}
 
-	log.Infof("sender options: %+v", senderOpts)
+	log.Debugf("telegram sender options: %+v", senderOpts)
+	log.Debugf("telegram message:\n%q", resp.Message)
 
 	var err error
 	switch resp.Type {
@@ -137,7 +140,7 @@ func (b *Bot) processResponseMessage(
 func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 	log := logging.WithContext(ctx)
 
-	log.Infof("got telegram message: %q", c.Text())
+	log.Debugf("got telegram message: %q", c.Text())
 
 	req := b.botMsgToRequest(c)
 

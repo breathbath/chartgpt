@@ -1,6 +1,6 @@
 package telegram
 
-import "breathbathChartGPT/pkg/msg"
+import "breathbathChatGPT/pkg/msg"
 
 func BuildBot(msgHandler msg.Handler) (*Bot, error) {
 	config, err := LoadConfig()

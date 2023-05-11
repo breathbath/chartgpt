@@ -1,14 +1,17 @@
 package auth
 
-import "breathbathChartGPT/pkg/msg"
+import (
+	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/storage"
+)
 
-func BuildHandler(successHandler msg.Handler, storage Storage) (*Handler, error) {
+func BuildHandler(successHandler msg.Handler, st storage.Client) (*Handler, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := NewHandler(successHandler, storage, cfg)
+	handler, err := NewHandler(successHandler, st, cfg)
 	if err != nil {
 		return nil, err
 	}

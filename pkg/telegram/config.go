@@ -1,7 +1,7 @@
 package telegram
 
 import (
-	"breathbathChartGPT/pkg/errs"
+	"breathbathChatGPT/pkg/errs"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
 )

@@ -1,6 +1,6 @@
-# Breathbath ChartGPT
+# Breathbath ChatGPT
 
-Breathbath ChartGPT integrates ChartGPT with popular message bots. 
+Breathbath ChatGPT integrates ChatGPT with popular message bots. 
 
 # List of supported bots:
 - Telegram Bots
@@ -12,7 +12,7 @@ Use https://github.com/elasticdog/transcrypt#initialize-a-clone-of-a-configured-
 
 ## How to generate a bcrypt encoded hash
 
-- Just run `chartgpt bcrypt`. 
+- Just run `chatgpt bcrypt`. 
 
 - You will be prompted for a password of your choice.
 

@@ -6,7 +6,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "bgpt",
-	Short: "Breathbath ChartGPT integrates it into popular bots like Telegram",
+	Short: "Breathbath ChatGPT integrates it into popular bots like Telegram",
 }
 
 func Execute() error {

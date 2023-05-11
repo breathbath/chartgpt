@@ -1,14 +1,14 @@
 version: '3.3'
 services:
-  chartgpt:
-    container_name: chartgpt
+  chatgpt:
+    container_name: chatgpt
     build:
       context: .
       dockerfile: ./docker/app/Dockerfile
     depends_on:
       - redis
     restart: always
-    entrypoint: /app/chartgpt telegram
+    entrypoint: /app/chatgpt telegram
   redis:
     image: redis:alpine
     container_name: redis

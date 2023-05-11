@@ -1,8 +1,8 @@
 FROM golang:1.20 AS build-env
 
-RUN mkdir -p /build/chartgpt
+RUN mkdir -p /build/chatgpt
 
-WORKDIR /build/chartgpt
+WORKDIR /build/chatgpt
 COPY go.mod .
 COPY go.sum .
 RUN go mod download
@@ -12,9 +12,9 @@ ARG version
 RUN echo "Version $version"
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-        -o /build/chartgpt/chartgpt \
+        -o /build/chatgpt/chatgpt \
         -ldflags \
-        "-X breathbathChartGPT/pkg/cmd.Version=$version" \
+        "-X breathbathChatGPT/pkg/cmd.Version=$version" \
         main.go
 
 # -------------
@@ -28,8 +28,8 @@ WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
 USER app:app
 
-COPY --from=build-env /build/chartgpt/chartgpt /app/
+COPY --from=build-env /build/chatgpt/chatgpt /app/
 COPY .env.default /app/.env.default
 COPY .env.secret /app/.env.secret
 COPY .env.local /app/.env.local
-CMD /app/chartgpt telegram
+CMD /app/chatgpt telegram

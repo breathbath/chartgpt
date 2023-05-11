@@ -1,6 +1,6 @@
 package auth
 
-import "breathbathChartGPT/pkg/errs"
+import "breathbathChatGPT/pkg/errs"
 
 type UserState uint
 

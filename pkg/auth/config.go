@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"breathbathChartGPT/pkg/errs"
+	"breathbathChatGPT/pkg/errs"
 	"encoding/json"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
