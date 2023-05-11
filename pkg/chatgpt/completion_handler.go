@@ -25,7 +25,7 @@ type ChatCompletionHandler struct {
 func NewChatCompletionHandler(cfg *Config, db storage.Client, commands Commands, loader *Loader) (h *ChatCompletionHandler, help string, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
-		return nil, "", err
+		return nil, "", e
 	}
 
 	help = commands.GetHelp()
