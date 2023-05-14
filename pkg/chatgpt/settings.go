@@ -16,6 +16,13 @@ type Loader struct {
 	cfg *Config
 }
 
+func NewSettingsLoader(db storage.Client, cfg *Config) *Loader {
+	return &Loader{
+		db:  db,
+		cfg: cfg,
+	}
+}
+
 func (l *Loader) LoadModel(ctx context.Context, req *msg.Request) *ConfiguredModel {
 	log := logging.WithContext(ctx)
 

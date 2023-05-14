@@ -13,20 +13,20 @@ import (
 	"time"
 )
 
-type SetModelCommand struct {
+type SetModelHandler struct {
 	ModelCommand
-	operators []string
-	loader    *Loader
+	command string
+	loader  *Loader
 }
 
-func NewSetModelCommand(cfg *Config, db storage.Client, loader *Loader) *SetModelCommand {
-	return &SetModelCommand{
+func NewSetModelHandler(cfg *Config, db storage.Client, loader *Loader) *SetModelHandler {
+	return &SetModelHandler{
 		ModelCommand: ModelCommand{
 			cfg: cfg,
 			db:  db,
 		},
-		operators: []string{"setm", "setmodel"},
-		loader:    loader,
+		command: "/setmodel",
+		loader:  loader,
 	}
 }
 
@@ -54,14 +54,14 @@ func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, err
 	return modelIDs, nil
 }
 
-func (smc *SetModelCommand) CanHandle(ctx context.Context, req *msg.Request) bool {
-	return utils.MatchesAny(req.Message, CommandPrefix, smc.operators)
+func (smc *SetModelHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+	return strings.HasPrefix(req.Message, smc.command), nil
 }
 
-func (smc *SetModelCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	modelName := extractCommandValue(req.Message, smc.operators)
+	modelName := utils.ExtractCommandValue(req.Message, smc.command)
 	if modelName == "" {
 		return &msg.Response{
 			Message: "empty model name provided",
@@ -97,13 +97,11 @@ func (smc *SetModelCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}, nil
 }
 
-func (smc *SetModelCommand) GetHelp() string {
-	operatorHelp := buildHelpFromOperators(smc.operators)
-
-	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", operatorHelp)
+func (smc *SetModelHandler) GetHelp() string {
+	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", smc.command)
 }
 
-func (smc *SetModelCommand) isModelSupported(ctx context.Context, modelName string) (bool, error) {
+func (smc *SetModelHandler) isModelSupported(ctx context.Context, modelName string) (bool, error) {
 	supportedModelIDs, err := smc.getSupportedModelIDs(ctx)
 	if err != nil {
 		return false, err
@@ -120,8 +118,8 @@ func (smc *SetModelCommand) isModelSupported(ctx context.Context, modelName stri
 
 type GetModelsCommand struct {
 	ModelCommand
-	operators []string
-	loader    *Loader
+	command string
+	loader  *Loader
 }
 
 func NewGetModelsCommand(cfg *Config, db storage.Client, loader *Loader) *GetModelsCommand {
@@ -130,13 +128,13 @@ func NewGetModelsCommand(cfg *Config, db storage.Client, loader *Loader) *GetMod
 			cfg: cfg,
 			db:  db,
 		},
-		operators: []string{"getm", "models"},
-		loader:    loader,
+		command: "/models",
+		loader:  loader,
 	}
 }
 
-func (gmc *GetModelsCommand) CanHandle(ctx context.Context, req *msg.Request) bool {
-	return utils.MatchesAny(req.Message, CommandPrefix, gmc.operators)
+func (gmc *GetModelsCommand) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+	return strings.HasPrefix(req.Message, gmc.command), nil
 }
 
 func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -168,7 +166,5 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 }
 
 func (gmc *GetModelsCommand) GetHelp() string {
-	operatorHelp := buildHelpFromOperators(gmc.operators)
-
-	return fmt.Sprintf("%s: to get the list of supported ChatGPT models", operatorHelp)
+	return fmt.Sprintf("%s: to get the list of supported ChatGPT models", gmc.command)
 }

@@ -18,24 +18,20 @@ const maxConversationLength = 5
 type ChatCompletionHandler struct {
 	cfg            *Config
 	settingsLoader *Loader
-	commands       Commands
 	db             storage.Client
 }
 
-func NewChatCompletionHandler(cfg *Config, db storage.Client, commands Commands, loader *Loader) (h *ChatCompletionHandler, help string, err error) {
+func NewChatCompletionHandler(cfg *Config, db storage.Client, loader *Loader) (h *ChatCompletionHandler, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
-		return nil, "", e
+		return nil, e
 	}
-
-	help = commands.GetHelp()
 
 	return &ChatCompletionHandler{
 		cfg:            cfg,
-		commands:       commands,
 		db:             db,
 		settingsLoader: loader,
-	}, help, nil
+	}, nil
 }
 
 func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.Request) (*Conversation, error) {
@@ -55,12 +51,6 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 
 func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logging.WithContext(ctx)
-
-	for _, ch := range h.commands {
-		if ch.CanHandle(ctx, req) {
-			return ch.Handle(ctx, req)
-		}
-	}
 
 	model := h.settingsLoader.LoadModel(ctx, req)
 
@@ -124,4 +114,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 			"format":  "",
 		},
 	}, nil
+}
+
+func (h *ChatCompletionHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+	return true, nil
 }

@@ -7,37 +7,38 @@ import (
 	"context"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"strings"
 	"time"
 )
 
 const defaultConversationValidity = time.Minute * 30
 
-type SetConversationContextCommand struct {
-	operators []string
-	db        storage.Client
+type SetConversationContextHandler struct {
+	db      storage.Client
+	command string
 }
 
-func NewSetConversationContextCommand(db storage.Client) *SetConversationContextCommand {
-	return &SetConversationContextCommand{
-		operators: []string{"mode", "context"},
-		db:        db,
+func NewSetConversationContextCommand(db storage.Client) *SetConversationContextHandler {
+	return &SetConversationContextHandler{
+		db:      db,
+		command: "/context",
 	}
 }
 
-func (sc *SetConversationContextCommand) CanHandle(ctx context.Context, req *msg.Request) bool {
-	return utils.MatchesAny(req.Message, CommandPrefix, sc.operators)
+func (sc *SetConversationContextHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+	return strings.HasPrefix(req.Message, sc.command), nil
 }
 
 func getConversationKey(req *msg.Request) string {
 	return "chatgpt/conversation/" + req.GetConversationId()
 }
 
-func (sc *SetConversationContextCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
 	log.Debug("will set conversation context")
 
-	conversationContext := extractCommandValue(req.Message, sc.operators)
+	conversationContext := utils.ExtractCommandValue(req.Message, sc.command)
 	if conversationContext == "" {
 		return &msg.Response{
 			Message: "empty conversation context provided",
@@ -72,29 +73,30 @@ func (sc *SetConversationContextCommand) Handle(ctx context.Context, req *msg.Re
 	}, nil
 }
 
-func (sc *SetConversationContextCommand) GetHelp() string {
-	operatorHelp := buildHelpFromOperators(sc.operators)
-
-	return fmt.Sprintf("%s #text#: to set context for the current conversation (see setting system role message https://platform.openai.com/docs/guides/chat/introduction)", operatorHelp)
+func (sc *SetConversationContextHandler) GetHelp() string {
+	return fmt.Sprintf(
+		"%s #text#: to set context for the current conversation (see setting system role message https://platform.openai.com/docs/guides/chat/introduction)",
+		sc.command,
+	)
 }
 
-type ResetConversationCommand struct {
-	operators []string
-	db        storage.Client
+type ResetConversationHandler struct {
+	command string
+	db      storage.Client
 }
 
-func NewResetConversationCommand(db storage.Client) *ResetConversationCommand {
-	return &ResetConversationCommand{
-		operators: []string{"reset"},
-		db:        db,
+func NewResetConversationHandler(db storage.Client) *ResetConversationHandler {
+	return &ResetConversationHandler{
+		command: "/reset",
+		db:      db,
 	}
 }
 
-func (sc *ResetConversationCommand) CanHandle(ctx context.Context, req *msg.Request) bool {
-	return utils.MatchesAny(req.Message, CommandPrefix, sc.operators)
+func (sc *ResetConversationHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+	return strings.HasPrefix(req.Message, sc.command), nil
 }
 
-func (sc *ResetConversationCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
 	log.Debug("will reset conversation")
@@ -113,8 +115,6 @@ func (sc *ResetConversationCommand) Handle(ctx context.Context, req *msg.Request
 	}, nil
 }
 
-func (sc *ResetConversationCommand) GetHelp() string {
-	operatorHelp := buildHelpFromOperators(sc.operators)
-
-	return fmt.Sprintf("%s: to reset your conversation", operatorHelp)
+func (sc *ResetConversationHandler) GetHelp() string {
+	return fmt.Sprintf("%s: to reset your conversation", sc.command)
 }

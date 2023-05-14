@@ -1,20 +1,29 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
+	"context"
 )
 
-func BuildHandler(successHandler msg.Handler, st storage.Client) (*Handler, error) {
+func BuildLoginHandler(
+	db storage.Client,
+) (*LoginHandler, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	handler, err := NewHandler(successHandler, st, cfg)
+	validationErr := cfg.Validate()
+	if validationErr.HasErrors() {
+		return nil, validationErr
+	}
+
+	err = MigrateUsers(context.Background(), cfg, db)
 	if err != nil {
 		return nil, err
 	}
+
+	handler := NewLoginHandler(db, cfg)
 
 	return handler, nil
 }

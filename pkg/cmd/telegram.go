@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"breathbathChatGPT/pkg/auth"
-	"breathbathChatGPT/pkg/chatgpt"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
@@ -17,7 +15,17 @@ var telegramCmd = &cobra.Command{
 	Use:   "telegram",
 	Short: "Starts a Telegram bot",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		bot, err := buildTelegram()
+		db, err := storage.BuildRedisClient()
+		if err != nil {
+			return err
+		}
+
+		msgHandler, err := BuildMessageHandler(db)
+		if err != nil {
+			return err
+		}
+
+		bot, err := buildTelegram(msgHandler)
 		if err != nil {
 			return err
 		}
@@ -45,28 +53,8 @@ func waitForSignal(server *telegram.Bot) {
 	server.Stop()
 }
 
-func buildTelegram() (*telegram.Bot, error) {
-	db, err := storage.BuildRedisClient()
-	if err != nil {
-		return nil, err
-	}
-
-	chatgptMsgHandler, handlerHelp, err := chatgpt.BuildChatCompletionHandler(db)
-	if err != nil {
-		return nil, err
-	}
-
-	commandsHandler := &msg.CommandsHandler{
-		PassHandler: chatgptMsgHandler,
-		DynamicHelp: handlerHelp,
-	}
-
-	authHandler, err := auth.BuildHandler(commandsHandler, db)
-	if err != nil {
-		return nil, err
-	}
-
-	telegramBot, err := telegram.BuildBot(authHandler)
+func buildTelegram(h msg.Handler) (*telegram.Bot, error) {
+	telegramBot, err := telegram.BuildBot(h)
 	if err != nil {
 		return nil, err
 	}

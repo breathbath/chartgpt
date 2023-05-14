@@ -1,14 +1,17 @@
 package utils
 
-import "strings"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
 
-func MatchesAny(msg, prefix string, variants []string) bool {
-	for _, v := range variants {
-		prefixVariant := strings.ToLower(prefix + strings.TrimPrefix(v, prefix))
-		if strings.HasPrefix(strings.ToLower(msg), prefixVariant) {
-			return true
-		}
+func ExtractCommandValue(rawMsg, command string) string {
+	r := regexp.MustCompile(fmt.Sprintf(`^%s($|\s.*)`, command))
+	foundResults := r.FindStringSubmatch(rawMsg)
+	if len(foundResults) == 0 {
+		return ""
 	}
 
-	return false
+	return strings.TrimSpace(foundResults[1])
 }
