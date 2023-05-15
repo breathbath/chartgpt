@@ -1,10 +1,11 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/errs"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"breathbathChatGPT/pkg/errs"
 )
 
 type UserState uint

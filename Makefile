@@ -3,6 +3,7 @@ export SHELL:=/bin/bash
 
 registry ?= breathbath/chatgpt
 image_tag ?= $(shell cat VERSION )
+GOLANGCI_LINT_VERSION=1.51.2
 
 .PHONY: image
 image:
@@ -24,3 +25,16 @@ tag:
 ## Crate tag from VERSION and push it github
 	git tag -f $(image_tag) master
 	git push origin $(image_tag) -f
+
+.PHONY: fmt
+fmt: ##
+## Run gofumpt
+	$(call check_version,gofumpt,v$(GOFUMPT_VERSION),$$(gofumpt -version | cut -d' ' -f1))
+	gofumpt -l -w -e .
+
+
+.PHONY: lint
+lint: ##
+## Run golangci-lint
+	$(call check_version,golangci-lint,$(GOLANGCI_LINT_VERSION),$$(golangci-lint version| grep -oE "version.*?[[:digit:].]+" | grep -oE "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+"))
+	golangci-lint run

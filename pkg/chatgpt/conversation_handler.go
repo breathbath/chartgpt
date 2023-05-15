@@ -1,14 +1,16 @@
 package chatgpt
 
 import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/utils"
-	"context"
-	"fmt"
+
 	"github.com/sirupsen/logrus"
-	"strings"
-	"time"
 )
 
 const defaultConversationValidity = time.Minute * 30

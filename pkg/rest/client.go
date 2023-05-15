@@ -1,16 +1,18 @@
 package rest
 
 import (
-	"breathbathChatGPT/pkg/storage"
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/pkg/errors"
-	logging "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"time"
+
+	"breathbathChatGPT/pkg/storage"
+
+	"github.com/pkg/errors"
+	logging "github.com/sirupsen/logrus"
 )
 
 const defaultRequestCacheValidity = time.Hour

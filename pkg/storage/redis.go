@@ -1,16 +1,18 @@
 package storage
 
 import (
-	"breathbathChatGPT/pkg/errs"
-	"breathbathChatGPT/pkg/utils"
 	"context"
 	"encoding/json"
+	"time"
+
+	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/utils"
+
 	"github.com/cenkalti/backoff/v4"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
 	base "github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 const IsNotLoggableContentCtxKey = "is_not_loggable"
@@ -94,7 +96,6 @@ func (c *RedisClient) Read(ctx context.Context, key string) (raw []byte, found b
 	log := logrus.WithContext(ctx)
 
 	val, err := c.baseClient.Get(ctx, key).Result()
-
 	if err != nil {
 		if err == base.Nil {
 			log.Infof("nothing found in redis under key %q", key)
@@ -133,7 +134,6 @@ func (c *RedisClient) Delete(ctx context.Context, key string) error {
 	log := logrus.WithContext(ctx)
 
 	err := c.baseClient.Del(ctx, key).Err()
-
 	if err != nil {
 		return errors.Wrapf(err, "failed to delete data from redis under key %q", key)
 	}

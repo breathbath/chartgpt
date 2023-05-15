@@ -1,9 +1,10 @@
 package telegram
 
 import (
-	"breathbathChatGPT/pkg/msg"
 	"context"
 	"strings"
+
+	"breathbathChatGPT/pkg/msg"
 )
 
 type StartHandler struct{}

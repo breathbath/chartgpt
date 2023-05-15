@@ -1,11 +1,13 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/errs"
 	"encoding/json"
+	"time"
+
+	"breathbathChatGPT/pkg/errs"
+
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type RawConfig struct {

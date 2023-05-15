@@ -1,11 +1,13 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"strings"
+
+	"breathbathChatGPT/pkg/msg"
+
+	"github.com/sirupsen/logrus"
 )
 
 type LogoutHandler struct {

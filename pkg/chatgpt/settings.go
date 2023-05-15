@@ -1,12 +1,14 @@
 package chatgpt
 
 import (
+	"context"
+	"time"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
-	"context"
+
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
-	"time"
 )
 
 const ModelChangeDuration = time.Minute * 10

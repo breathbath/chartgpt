@@ -1,11 +1,13 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/msg"
 	"context"
+	"time"
+
+	"breathbathChatGPT/pkg/msg"
+
 	logging "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"time"
 )
 
 type LoginHandler struct {

@@ -1,19 +1,23 @@
 package chatgpt
 
 import (
+	"context"
+	"strings"
+	"time"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/rest"
 	"breathbathChatGPT/pkg/storage"
-	"context"
+
 	logging "github.com/sirupsen/logrus"
-	"strings"
-	"time"
 )
 
-const URL = "https://api.openai.com"
-const CompletionsURL = URL + "/v1/chat/completions"
-const ModelsURL = URL + "/v1/models"
-const maxConversationLength = 5
+const (
+	URL                   = "https://api.openai.com"
+	CompletionsURL        = URL + "/v1/chat/completions"
+	ModelsURL             = URL + "/v1/models"
+	maxConversationLength = 5
+)
 
 type ChatCompletionHandler struct {
 	cfg            *Config

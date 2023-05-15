@@ -1,10 +1,12 @@
 package telegram
 
 import (
-	"breathbathChatGPT/pkg/errs"
-	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
+
+	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/msg"
+
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 	"gopkg.in/telebot.v3"

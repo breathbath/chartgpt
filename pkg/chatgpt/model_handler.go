@@ -1,16 +1,18 @@
 package chatgpt
 
 import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/rest"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/utils"
-	"context"
-	"fmt"
+
 	"github.com/sirupsen/logrus"
-	"sort"
-	"strings"
-	"time"
 )
 
 type SetModelHandler struct {

@@ -1,8 +1,9 @@
 package errs
 
 import (
-	"github.com/pkg/errors"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Multi struct {

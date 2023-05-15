@@ -1,20 +1,24 @@
 package auth
 
 import (
+	"context"
+	"fmt"
+	"strings"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/utils"
-	"context"
-	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"strings"
 )
 
-const usersPrefix = "users"
-const usersVersion = "v1"
+const (
+	usersPrefix  = "users"
+	usersVersion = "v1"
+)
 
 func GetUserFromReq(req *msg.Request) *CachedUser {
 	userI, ok := req.Meta["curUser"]

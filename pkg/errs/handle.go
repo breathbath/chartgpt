@@ -2,6 +2,7 @@ package errs
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 )

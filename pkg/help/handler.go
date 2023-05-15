@@ -1,9 +1,10 @@
 package help
 
 import (
-	"breathbathChatGPT/pkg/msg"
 	"context"
 	"strings"
+
+	"breathbathChatGPT/pkg/msg"
 )
 
 type Provider interface {
