@@ -2,13 +2,14 @@ version: '3.3'
 services:
   chatgpt:
     container_name: chatgpt
-    build:
-      context: .
-      dockerfile: ./docker/app/Dockerfile
+    image: breathbath/chatgpt
     depends_on:
       - redis
     restart: always
     entrypoint: /app/chatgpt telegram
+    volumes:
+      - ./.env.local:/app/.env.local
+      - ./.env.secret:/app/.env.secret
   redis:
     image: redis:alpine
     container_name: redis
