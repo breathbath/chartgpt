@@ -9,17 +9,17 @@ import (
 	"breathbathChatGPT/pkg/telegram"
 )
 
-func BuildMessageHandler(db storage.Client) (msg.Handler, error) {
-	handlerComposite := msg.HandlerComposite{
-		Handlers: []msg.Handler{},
-	}
+func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
+	us := auth.NewUserStorage(db)
 
-	loginHandler, err := auth.BuildLoginHandler(db)
+	userMiddleware := auth.NewUserMiddleware(us)
+
+	loginHandler, err := auth.BuildLoginHandler(us)
 	if err != nil {
 		return nil, err
 	}
 
-	logoutHandler := auth.NewLogoutHandler(db)
+	logoutHandler := auth.NewLogoutHandler(us)
 
 	startHandler := &telegram.StartHandler{}
 
@@ -44,6 +44,10 @@ func BuildMessageHandler(db storage.Client) (msg.Handler, error) {
 
 	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(chartGptCfg, db, loader)
 
+	addUserHandler := auth.NewAddUserCommand(us)
+	listUsersHandler := auth.NewListUsersCommand(us)
+	deleteUsersHandler := auth.NewDeleteUserCommand(us)
+
 	helpHandler := &help.Handler{
 		Providers: []help.Provider{
 			logoutHandler,
@@ -51,21 +55,30 @@ func BuildMessageHandler(db storage.Client) (msg.Handler, error) {
 			setConversationCtxHandler,
 			getModelsHandler,
 			resetConversationHandler,
+			addUserHandler,
+			listUsersHandler,
+			deleteUsersHandler,
 		},
 	}
 
-	handlerComposite.Handlers = append(
-		handlerComposite.Handlers,
-		startHandler,
-		loginHandler,
-		helpHandler,
-		logoutHandler,
-		setConversationCtxHandler,
-		resetConversationHandler,
-		setModelHandler,
-		getModelsHandler,
-		chatCompletionHandler,
-	)
+	r := &msg.Router{
+		Handlers: []msg.Handler{
+			startHandler,
+			loginHandler,
+			helpHandler,
+			logoutHandler,
+			setConversationCtxHandler,
+			resetConversationHandler,
+			setModelHandler,
+			getModelsHandler,
+			addUserHandler,
+			listUsersHandler,
+			deleteUsersHandler,
+			chatCompletionHandler,
+		},
+	}
 
-	return handlerComposite, nil
+	r.UseMiddleware(userMiddleware)
+
+	return r, nil
 }

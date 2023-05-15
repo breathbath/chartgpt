@@ -73,7 +73,7 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	}, nil
 }
 
-func (sc *SetConversationContextHandler) GetHelp() string {
+func (sc *SetConversationContextHandler) GetHelp(ctx context.Context, req *msg.Request) string {
 	return fmt.Sprintf(
 		"%s #text#: to set context for the current conversation (see setting system role message https://platform.openai.com/docs/guides/chat/introduction)",
 		sc.command,
@@ -115,6 +115,6 @@ func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request
 	}, nil
 }
 
-func (sc *ResetConversationHandler) GetHelp() string {
+func (sc *ResetConversationHandler) GetHelp(ctx context.Context, req *msg.Request) string {
 	return fmt.Sprintf("%s: to reset your conversation", sc.command)
 }

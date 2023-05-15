@@ -1,12 +1,11 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/storage"
 	"context"
 )
 
 func BuildLoginHandler(
-	db storage.Client,
+	us *UserStorage,
 ) (*LoginHandler, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -18,12 +17,12 @@ func BuildLoginHandler(
 		return nil, validationErr
 	}
 
-	err = MigrateUsers(context.Background(), cfg, db)
+	err = MigrateUsers(context.Background(), cfg, us)
 	if err != nil {
 		return nil, err
 	}
 
-	handler := NewLoginHandler(db, cfg)
+	handler := NewLoginHandler(us, cfg)
 
 	return handler, nil
 }

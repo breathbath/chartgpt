@@ -2,22 +2,20 @@ package auth
 
 import (
 	"breathbathChatGPT/pkg/msg"
-	"breathbathChatGPT/pkg/storage"
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"strings"
 )
 
 type LogoutHandler struct {
-	db      storage.Client
+	us      *UserStorage
 	command string
 }
 
-func NewLogoutHandler(db storage.Client) *LogoutHandler {
+func NewLogoutHandler(us *UserStorage) *LogoutHandler {
 	return &LogoutHandler{
-		db:      db,
+		us:      us,
 		command: "/logout",
 	}
 }
@@ -29,32 +27,19 @@ func (h *LogoutHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, 
 func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	if req.Sender.GetID() == "" {
-		return nil, errors.New("unknown message sender id")
-	}
+	user := GetUserFromReq(req)
 
-	platform := req.Platform
-	userId := req.Sender.GetID()
-
-	cacheKey := GenerateUserCacheKey(platform, userId)
-
-	u := new(CachedUser)
-	var isFound bool
-	var err error
-	isFound, err = h.db.Load(ctx, cacheKey, u)
-	if err != nil {
-		return nil, err
-	}
-	if !isFound {
-		log.Warnf("user not found by %q, will do nothing", cacheKey)
+	if user == nil {
+		log.Warnf("user not found, will do nothing")
 		return &msg.Response{
 			Message: "User not found",
 			Type:    msg.Success,
 		}, nil
 	}
 
-	u.State = UserUnverified
-	err = h.db.Save(ctx, cacheKey, u, 0)
+	user.State = UserUnverified
+
+	err := h.us.WriteUserToStorage(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +50,6 @@ func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Resp
 	}, nil
 }
 
-func (h *LogoutHandler) GetHelp() string {
+func (h *LogoutHandler) GetHelp(ctx context.Context, req *msg.Request) string {
 	return fmt.Sprintf("%s: to logout from the system", h.command)
 }

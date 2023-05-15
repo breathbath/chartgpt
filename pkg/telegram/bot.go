@@ -13,10 +13,10 @@ import (
 type Bot struct {
 	conf       *Config
 	baseBot    *telebot.Bot
-	msgHandler msg.Handler
+	msgHandler *msg.Router
 }
 
-func NewBot(c *Config, h msg.Handler) (*Bot, error) {
+func NewBot(c *Config, r *msg.Router) (*Bot, error) {
 	validationErr := c.Validate()
 	if validationErr.HasErrors() {
 		return nil, validationErr
@@ -32,7 +32,7 @@ func NewBot(c *Config, h msg.Handler) (*Bot, error) {
 		return nil, errors.Wrap(err, "failed to create telegram bot")
 	}
 
-	return &Bot{conf: c, baseBot: botApi, msgHandler: h}, nil
+	return &Bot{conf: c, baseBot: botApi, msgHandler: r}, nil
 }
 
 func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
@@ -144,7 +144,7 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 
 	req := b.botMsgToRequest(c)
 
-	resp, err := b.msgHandler.Handle(ctx, req)
+	resp, err := b.msgHandler.Route(ctx, req)
 	if err != nil {
 		_, sendErr := b.baseBot.Send(c.Sender(), "Unexpected error", &telebot.SendOptions{})
 		if sendErr != nil {

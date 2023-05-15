@@ -20,12 +20,12 @@ var telegramCmd = &cobra.Command{
 			return err
 		}
 
-		msgHandler, err := BuildMessageHandler(db)
+		msgRouter, err := BuildMessageRouter(db)
 		if err != nil {
 			return err
 		}
 
-		bot, err := buildTelegram(msgHandler)
+		bot, err := buildTelegram(msgRouter)
 		if err != nil {
 			return err
 		}
@@ -53,8 +53,8 @@ func waitForSignal(server *telegram.Bot) {
 	server.Stop()
 }
 
-func buildTelegram(h msg.Handler) (*telegram.Bot, error) {
-	telegramBot, err := telegram.BuildBot(h)
+func buildTelegram(r *msg.Router) (*telegram.Bot, error) {
+	telegramBot, err := telegram.BuildBot(r)
 	if err != nil {
 		return nil, err
 	}

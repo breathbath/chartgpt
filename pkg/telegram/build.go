@@ -2,13 +2,13 @@ package telegram
 
 import "breathbathChatGPT/pkg/msg"
 
-func BuildBot(msgHandler msg.Handler) (*Bot, error) {
+func BuildBot(r *msg.Router) (*Bot, error) {
 	config, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	bot, err := NewBot(config, msgHandler)
+	bot, err := NewBot(config, r)
 	if err != nil {
 		return nil, err
 	}

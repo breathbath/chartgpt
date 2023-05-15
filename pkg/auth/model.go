@@ -2,8 +2,9 @@ package auth
 
 import (
 	"breathbathChatGPT/pkg/errs"
+	"encoding/json"
 	"fmt"
-	"strings"
+	"time"
 )
 
 type UserState uint
@@ -13,13 +14,62 @@ const (
 	UserVerified
 )
 
+const (
+	AdminRole = "admin"
+	UserRole  = "user"
+)
+
+func (us UserState) String() string {
+	switch us {
+	case UserVerified:
+		return "verified"
+	case UserUnverified:
+		return "unverified"
+	default:
+		return ""
+	}
+}
+
 type CachedUser struct {
-	Id           string    `json:"id"`
+	Uid          string    `json:"uid"`
+	Login        string    `json:"login"`
 	State        UserState `json:"state"`
 	PlatformName string    `json:"platform"`
 	Role         string    `json:"role"`
 	PasswordHash string    `json:"password_hash"`
 	LoginTill    int64     `json:"login_till"`
+}
+
+func (cu *CachedUser) String() string {
+	var loginTillP *time.Time
+
+	if cu.LoginTill > 0 {
+		loginTill := time.Unix(cu.LoginTill, 0)
+		loginTillP = &loginTill
+	}
+
+	res := struct {
+		Uid          string     `json:"uid"`
+		Login        string     `json:"login"`
+		State        string     `json:"state"`
+		PlatformName string     `json:"platform"`
+		Role         string     `json:"role"`
+		LoginTill    *time.Time `json:"login_till"`
+	}{
+		Uid:          cu.Uid,
+		Login:        cu.Login,
+		State:        cu.State.String(),
+		PlatformName: cu.PlatformName,
+		Role:         cu.Role,
+		LoginTill:    loginTillP,
+	}
+
+	userRaw, err := json.Marshal(res)
+	if err != nil {
+		return fmt.Sprintf("%+v", res)
+	}
+
+	return string(userRaw)
 }
 
 type ConfiguredUser struct {
@@ -49,8 +99,4 @@ func (u ConfiguredUser) Validate() error {
 	}
 
 	return nil
-}
-
-func GenerateUserCacheKey(platform, login string) string {
-	return fmt.Sprintf("users/%s/%s", strings.ToLower(platform), strings.ToLower(login))
 }

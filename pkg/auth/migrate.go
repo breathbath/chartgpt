@@ -1,34 +1,34 @@
 package auth
 
 import (
-	"breathbathChatGPT/pkg/storage"
 	"context"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
-func MigrateUsers(ctx context.Context, cfg *Config, db storage.Client) error {
+func MigrateUsers(ctx context.Context, cfg *Config, us *UserStorage) error {
 	log := logrus.WithContext(ctx)
 	log.Debug("Will migrate configured users to db")
 
 	for _, u := range cfg.Users {
-		cacheKey := GenerateUserCacheKey(u.PlatformName, u.Login)
-		cachedUser := new(CachedUser)
-		found, err := db.Load(ctx, cacheKey, cachedUser)
+		cachedUser, err := us.ReadUserFromStorage(ctx, u.PlatformName, u.Login)
 		if err != nil {
 			return err
 		}
 
-		if found {
+		if cachedUser != nil {
 			continue
 		}
 
-		err = db.Save(ctx, cacheKey, CachedUser{
-			Id:           u.Login,
+		u := &CachedUser{
+			Uid:          uuid.NewString(),
+			Login:        u.Login,
 			State:        UserUnverified,
 			PlatformName: u.PlatformName,
 			Role:         u.Role,
 			PasswordHash: u.PasswordHash,
-		}, 0)
+		}
+		err = us.WriteUserToStorage(ctx, u)
 
 		if err != nil {
 			return err

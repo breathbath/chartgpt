@@ -103,14 +103,16 @@ func (c *RedisClient) Read(ctx context.Context, key string) (raw []byte, found b
 		return nil, false, errors.Wrapf(err, "failed to get data from redis under key %q", key)
 	}
 
-	log.Debugf("got data from redis under key %q", key)
+	if ctx.Value(IsNotLoggableContentCtxKey) != nil {
+		log.Debugf("successfully read data to redis under key %q", key)
+	} else {
+		log.Debugf("successfully read data %q from redis under key %q", string(raw), key)
+	}
 
 	return []byte(val), true, nil
 }
 
 func (c *RedisClient) Write(ctx context.Context, key string, raw []byte, exp time.Duration) error {
-	isNotLoggableMessage := ctx.Value(IsNotLoggableContentCtxKey)
-
 	log := logrus.WithContext(ctx)
 
 	err := c.baseClient.Set(ctx, key, raw, exp).Err()
@@ -118,7 +120,7 @@ func (c *RedisClient) Write(ctx context.Context, key string, raw []byte, exp tim
 		return errors.Wrapf(err, "failed to write data to redis under key %q", key)
 	}
 
-	if isNotLoggableMessage != nil {
+	if ctx.Value(IsNotLoggableContentCtxKey) != nil {
 		log.Debugf("wrote hidden data to redis under key %q", key)
 	} else {
 		log.Debugf("wrote data %q to redis under key %q", string(raw), key)
@@ -160,8 +162,6 @@ func (c *RedisClient) Load(ctx context.Context, key string, target interface{}) 
 		return false, errors.Wrapf(err, "failed to convert %q to %s", targetType, string(rawData))
 	}
 
-	log.Debugf("loaded data: %s", string(rawData))
-
 	return true, nil
 }
 
@@ -172,4 +172,13 @@ func (c *RedisClient) Save(ctx context.Context, key string, data interface{}, va
 	}
 
 	return c.Write(ctx, key, rawBytes, validity)
+}
+
+func (c *RedisClient) FindKeys(ctx context.Context, pattern string) (keys []string, err error) {
+	val := c.baseClient.Keys(ctx, pattern)
+	if val.Err() != nil {
+		return nil, errors.Wrapf(err, "failed to find keys in redis by pattern %q", pattern)
+	}
+
+	return val.Val(), nil
 }

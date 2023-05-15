@@ -97,7 +97,7 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}, nil
 }
 
-func (smc *SetModelHandler) GetHelp() string {
+func (smc *SetModelHandler) GetHelp(ctx context.Context, req *msg.Request) string {
 	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", smc.command)
 }
 
@@ -165,6 +165,6 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	}, nil
 }
 
-func (gmc *GetModelsCommand) GetHelp() string {
+func (gmc *GetModelsCommand) GetHelp(ctx context.Context, req *msg.Request) string {
 	return fmt.Sprintf("%s: to get the list of supported ChatGPT models", gmc.command)
 }

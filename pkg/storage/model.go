@@ -11,4 +11,5 @@ type Client interface {
 	Delete(ctx context.Context, key string) error
 	Load(ctx context.Context, key string, target interface{}) (found bool, err error)
 	Save(ctx context.Context, key string, data interface{}, validity time.Duration) error
+	FindKeys(ctx context.Context, pattern string) (keys []string, err error)
 }
