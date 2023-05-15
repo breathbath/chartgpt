@@ -3,7 +3,7 @@ package chatgpt
 import "encoding/json"
 
 type ChatCompletionResponse struct {
-	Id         string                   `json:"id"`
+	ID         string                   `json:"id"`
 	Object     string                   `json:"object"`
 	CreatedAt  int64                    `json:"created"`
 	Model      string                   `json:"model"`
@@ -41,7 +41,7 @@ type ChatCompletionMessage struct {
 }
 
 type ChatCompletionCompletion struct {
-	Id             string                 `json:"id"`
+	ID             string                 `json:"id"`
 	CreatedAt      int64                  `json:"created"`
 	Model          string                 `json:"model"`
 	Choices        []ChatCompletionChoice `json:"choices"`

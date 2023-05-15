@@ -47,7 +47,7 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 	}
 
 	if !found || len(conversation.Messages) > maxConversationLength {
-		return &Conversation{ID: req.GetConversationId()}, nil
+		return &Conversation{ID: req.GetConversationID()}, nil
 	}
 
 	return conversation, nil
@@ -75,7 +75,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 
 	chatResp := new(ChatCompletionResponse)
 	reqsr := rest.NewRequester(CompletionsURL, chatResp)
-	reqsr.WithBearer(h.cfg.ApiKey)
+	reqsr.WithBearer(h.cfg.APIKey)
 	reqsr.WithPOST()
 	reqsr.WithInput(requestData)
 
@@ -85,7 +85,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}
 
 	messages := make([]string, 0, len(chatResp.Choices))
-	for _, choice := range chatResp.Choices {
+	for i := range chatResp.Choices {
+		choice := chatResp.Choices[i]
 		if choice.Message.Content == "" {
 			continue
 		}
@@ -120,6 +121,6 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}, nil
 }
 
-func (h *ChatCompletionHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (h *ChatCompletionHandler) CanHandle(context.Context, *msg.Request) (bool, error) {
 	return true, nil
 }

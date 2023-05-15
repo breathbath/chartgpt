@@ -1,9 +1,10 @@
 package telegram
 
 import (
-	"breathbathChatGPT/pkg/errs"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
+
+	"breathbathChatGPT/pkg/errs"
 )
 
 type Config struct {
@@ -14,7 +15,7 @@ func (c *Config) Validate() *errs.Multi {
 	e := errs.NewMulti()
 
 	if c.APIToken == "" {
-		e.Err("TELEGRAM_ACCESS_TOKEN cannot be empty")
+		e.Errf("TELEGRAM_ACCESS_TOKEN cannot be empty")
 	}
 
 	return e

@@ -1,24 +1,25 @@
 package chatgpt
 
 import (
-	"breathbathChatGPT/pkg/errs"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
+
+	"breathbathChatGPT/pkg/errs"
 )
 
 type Config struct {
-	ApiKey       string `envconfig:"CHATGPT_API_KEY"`
+	APIKey       string `envconfig:"CHATGPT_API_KEY"`
 	DefaultModel string `envconfig:"CHATGPT_DEFAULT_MODEL"`
 }
 
 func (c *Config) Validate() *errs.Multi {
 	e := errs.NewMulti()
 
-	if c.ApiKey == "" {
-		e.Err("CHATGPT_API_KEY cannot be empty")
+	if c.APIKey == "" {
+		e.Errf("CHATGPT_API_KEY cannot be empty")
 	}
 	if c.DefaultModel == "" {
-		e.Err("CHATGPT_DEFAULT_MODEL cannot be empty")
+		e.Errf("CHATGPT_DEFAULT_MODEL cannot be empty")
 	}
 
 	return e

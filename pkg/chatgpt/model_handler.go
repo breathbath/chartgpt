@@ -40,8 +40,11 @@ type ModelCommand struct {
 func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, error) {
 	modelsResp := new(ModelsResponse)
 	reqsr := rest.NewRequester(ModelsURL, modelsResp)
-	reqsr.WithBearer(mc.cfg.ApiKey)
-	reqsr.WithCache("chatgpt/models", mc.db, time.Hour*24)
+	reqsr.WithBearer(mc.cfg.APIKey)
+
+	const defaultModelsCacheValidityHours = 24
+
+	reqsr.WithCache("chatgpt/models", mc.db, time.Hour*defaultModelsCacheValidityHours)
 
 	err := reqsr.Request(ctx)
 	if err != nil {
@@ -56,7 +59,7 @@ func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, err
 	return modelIDs, nil
 }
 
-func (smc *SetModelHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (smc *SetModelHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, smc.command), nil
 }
 
@@ -99,7 +102,7 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}, nil
 }
 
-func (smc *SetModelHandler) GetHelp(ctx context.Context, req *msg.Request) string {
+func (smc *SetModelHandler) GetHelp(context.Context, *msg.Request) string {
 	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", smc.command)
 }
 
@@ -135,7 +138,7 @@ func NewGetModelsCommand(cfg *Config, db storage.Client, loader *Loader) *GetMod
 	}
 }
 
-func (gmc *GetModelsCommand) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (gmc *GetModelsCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, gmc.command), nil
 }
 
@@ -152,9 +155,9 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	currentModel := gmc.loader.LoadModel(ctx, req)
 
 	sort.Strings(modelIDs)
-	for i, modelId := range modelIDs {
-		if modelId == currentModel.GetName() {
-			modelIDs[i] = "<b>" + modelId + "</b> [current]"
+	for i, modelID := range modelIDs {
+		if modelID == currentModel.GetName() {
+			modelIDs[i] = "<b>" + modelID + "</b> [current]"
 		}
 	}
 
@@ -167,6 +170,6 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	}, nil
 }
 
-func (gmc *GetModelsCommand) GetHelp(ctx context.Context, req *msg.Request) string {
+func (gmc *GetModelsCommand) GetHelp(context.Context, *msg.Request) string {
 	return fmt.Sprintf("%s: to get the list of supported ChatGPT models", gmc.command)
 }

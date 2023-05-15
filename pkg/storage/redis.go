@@ -15,7 +15,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const IsNotLoggableContentCtxKey = "is_not_loggable"
+type LogCtxType string
+
+const IsNotLoggableContentCtxKey LogCtxType = "is_not_loggable"
 
 type RedisConfig struct {
 	Addr string `envconfig:"REDIS_ADDR"`
@@ -26,7 +28,7 @@ func (c *RedisConfig) Validate() *errs.Multi {
 	e := errs.NewMulti()
 
 	if c.Addr == "" {
-		e.Err("REDIS_ADDR cannot be empty")
+		e.Errf("REDIS_ADDR cannot be empty")
 	}
 
 	return e
@@ -70,8 +72,9 @@ func NewClient(cfg *RedisConfig) (*RedisClient, error) {
 
 func checkRedis(cl *base.Client) error {
 	logrus.Infof("will ping redis")
+	const redisPingTimeoutSecond = 10
 	operation := func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*redisPingTimeoutSecond)
 		defer cancel()
 
 		status := cl.Ping(ctx)

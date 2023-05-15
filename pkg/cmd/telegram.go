@@ -5,11 +5,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	logging "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
-	logging "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 var telegramCmd = &cobra.Command{
@@ -47,7 +48,7 @@ func initTelegramCmd() {
 func waitForSignal(server *telegram.Bot) {
 	terminateSignals := make(chan os.Signal, 1)
 
-	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM) // NOTE:: syscall.SIGKILL we cannot catch kill -9 as its force kill signal.
+	signal.Notify(terminateSignals, syscall.SIGINT, syscall.SIGTERM)
 
 	s := <-terminateSignals
 	logging.Infof("Got one of stop signals, shutting down server gracefully, SIGNAL NAME : %v", s)

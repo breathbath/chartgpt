@@ -27,14 +27,14 @@ type Request struct {
 	Meta     map[string]interface{}
 }
 
-func (r Request) GetConversationId() string {
-	conversationIdI, ok := r.Meta["conversation_id"]
-	conversationId := ""
+func (r Request) GetConversationID() string {
+	conversationIDI, ok := r.Meta["conversation_id"]
+	conversationID := ""
 	if ok {
-		conversationId = fmt.Sprint(conversationIdI)
+		conversationID = fmt.Sprint(conversationIDI)
 	}
 
-	return fmt.Sprintf("%s/%s/%s", strings.ToLower(r.Platform), conversationId, strings.ToLower(r.Sender.GetID()))
+	return fmt.Sprintf("%s/%s/%s", strings.ToLower(r.Platform), conversationID, strings.ToLower(r.Sender.GetID()))
 }
 
 type Type uint

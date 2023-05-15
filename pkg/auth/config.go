@@ -23,7 +23,7 @@ type Config struct {
 func (c *Config) Validate() *errs.Multi {
 	multiErr := errs.NewMulti()
 	if len(c.Users) == 0 {
-		multiErr.Err("AUTH_USERS cannot be empty")
+		multiErr.Errf("AUTH_USERS cannot be empty")
 	}
 
 	for _, u := range c.Users {

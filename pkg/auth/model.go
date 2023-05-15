@@ -32,7 +32,7 @@ func (us UserState) String() string {
 }
 
 type CachedUser struct {
-	Uid          string    `json:"uid"`
+	UID          string    `json:"uid"`
 	Login        string    `json:"login"`
 	State        UserState `json:"state"`
 	PlatformName string    `json:"platform"`
@@ -50,14 +50,14 @@ func (cu *CachedUser) String() string {
 	}
 
 	res := struct {
-		Uid          string     `json:"uid"`
+		UID          string     `json:"uid"`
 		Login        string     `json:"login"`
 		State        string     `json:"state"`
 		PlatformName string     `json:"platform"`
 		Role         string     `json:"role"`
 		LoginTill    *time.Time `json:"login_till"`
 	}{
-		Uid:          cu.Uid,
+		UID:          cu.UID,
 		Login:        cu.Login,
 		State:        cu.State.String(),
 		PlatformName: cu.PlatformName,
@@ -83,16 +83,16 @@ type ConfiguredUser struct {
 func (u ConfiguredUser) Validate() error {
 	multiErr := errs.NewMulti()
 	if u.Role == "" {
-		multiErr.Err("role field cannot be empty in one of users in AUTH_USERS")
+		multiErr.Errf("role field cannot be empty in one of users in AUTH_USERS")
 	}
 	if u.Login == "" {
-		multiErr.Err("user login field cannot be empty in one of users in AUTH_USERS")
+		multiErr.Errf("user login field cannot be empty in one of users in AUTH_USERS")
 	}
 	if u.PasswordHash == "" {
-		multiErr.Err("password_hash field cannot be empty in one of users in AUTH_USERS")
+		multiErr.Errf("password_hash field cannot be empty in one of users in AUTH_USERS")
 	}
 	if u.PlatformName == "" {
-		multiErr.Err("platform field cannot be empty in one of users in AUTH_USERS")
+		multiErr.Errf("platform field cannot be empty in one of users in AUTH_USERS")
 	}
 
 	if multiErr.HasErrors() {

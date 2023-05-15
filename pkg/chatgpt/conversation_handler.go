@@ -27,12 +27,12 @@ func NewSetConversationContextCommand(db storage.Client) *SetConversationContext
 	}
 }
 
-func (sc *SetConversationContextHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (sc *SetConversationContextHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, sc.command), nil
 }
 
 func getConversationKey(req *msg.Request) string {
-	return "chatgpt/conversation/" + req.GetConversationId()
+	return "chatgpt/conversation/" + req.GetConversationID()
 }
 
 func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -61,7 +61,7 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 
 	conversation.Context = conversationContext
 	log.Debugf("Going to save conversation context: %q", conversationContext)
-	conversation.ID = req.GetConversationId()
+	conversation.ID = req.GetConversationID()
 
 	err = sc.db.Save(ctx, cacheKey, conversation, defaultConversationValidity)
 	if err != nil {
@@ -75,9 +75,10 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	}, nil
 }
 
-func (sc *SetConversationContextHandler) GetHelp(ctx context.Context, req *msg.Request) string {
+func (sc *SetConversationContextHandler) GetHelp(context.Context, *msg.Request) string {
 	return fmt.Sprintf(
-		"%s #text#: to set context for the current conversation (see setting system role message https://platform.openai.com/docs/guides/chat/introduction)",
+		"%s #text#: to set context for the current conversation (see setting system role message "+
+			"https://platform.openai.com/docs/guides/chat/introduction)",
 		sc.command,
 	)
 }
@@ -94,7 +95,7 @@ func NewResetConversationHandler(db storage.Client) *ResetConversationHandler {
 	}
 }
 
-func (sc *ResetConversationHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (sc *ResetConversationHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, sc.command), nil
 }
 
@@ -117,6 +118,6 @@ func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request
 	}, nil
 }
 
-func (sc *ResetConversationHandler) GetHelp(ctx context.Context, req *msg.Request) string {
+func (sc *ResetConversationHandler) GetHelp(context.Context, *msg.Request) string {
 	return fmt.Sprintf("%s: to reset your conversation", sc.command)
 }

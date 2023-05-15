@@ -48,7 +48,7 @@ func (l *Loader) LoadModel(ctx context.Context, req *msg.Request) *ConfiguredMod
 }
 
 func (l *Loader) getModelKey(req *msg.Request) string {
-	return "chatgpt/model/" + req.GetConversationId()
+	return "chatgpt/model/" + req.GetConversationID()
 }
 
 func (l *Loader) SaveModel(ctx context.Context, m *ConfiguredModel, req *msg.Request) error {

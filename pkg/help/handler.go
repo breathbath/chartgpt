@@ -15,7 +15,7 @@ type Handler struct {
 	Providers []Provider
 }
 
-func (ch *Handler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (ch *Handler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, "/help"), nil
 }
 

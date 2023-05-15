@@ -22,7 +22,7 @@ func NewLogoutHandler(us *UserStorage) *LogoutHandler {
 	}
 }
 
-func (h *LogoutHandler) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (h *LogoutHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, h.command), nil
 }
 
@@ -52,6 +52,6 @@ func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Resp
 	}, nil
 }
 
-func (h *LogoutHandler) GetHelp(ctx context.Context, req *msg.Request) string {
+func (h *LogoutHandler) GetHelp(context.Context, *msg.Request) string {
 	return fmt.Sprintf("%s: to logout from the system", h.command)
 }

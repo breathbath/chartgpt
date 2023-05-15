@@ -43,6 +43,9 @@ func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
 	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, db, loader)
 
 	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(chartGptCfg, db, loader)
+	if err != nil {
+		return nil, err
+	}
 
 	addUserHandler := auth.NewAddUserCommand(us)
 	listUsersHandler := auth.NewListUsersCommand(us)

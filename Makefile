@@ -3,7 +3,7 @@ export SHELL:=/bin/bash
 
 registry ?= breathbath/chatgpt
 image_tag ?= $(shell cat VERSION )
-GOLANGCI_LINT_VERSION=1.51.2
+GOLANGCI_LINT_VERSION=1.52.2
 
 .PHONY: image
 image:

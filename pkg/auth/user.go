@@ -53,10 +53,10 @@ func (us *UserStorage) WriteUserToStorage(ctx context.Context, u *CachedUser) er
 	return nil
 }
 
-func (us *UserStorage) ReadUserFromStorage(ctx context.Context, platform, userId string) (user *CachedUser, err error) {
+func (us *UserStorage) ReadUserFromStorage(ctx context.Context, platform, userID string) (user *CachedUser, err error) {
 	log := logrus.WithContext(ctx)
 
-	cacheKey := us.generateUserCacheKey(platform, userId)
+	cacheKey := us.generateUserCacheKey(platform, userID)
 	u := new(CachedUser)
 
 	ctxValue := context.WithValue(ctx, storage.IsNotLoggableContentCtxKey, true)
@@ -139,17 +139,17 @@ func NewUserMiddleware(us *UserStorage) *UserMiddleware {
 
 func (um UserMiddleware) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	platform := req.Platform
-	userId := req.Sender.GetID()
+	userID := req.Sender.GetID()
 
 	if platform == "" {
 		return nil, errors.New("unknown message platform")
 	}
 
-	if userId == "" {
+	if userID == "" {
 		return nil, errors.New("unknown message sender id")
 	}
 
-	u, err := um.us.ReadUserFromStorage(ctx, platform, userId)
+	u, err := um.us.ReadUserFromStorage(ctx, platform, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,14 +181,14 @@ func CheckAdmin(ctx context.Context, req *msg.Request) bool {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
-		log.Warnf("unauthorised attempt to access admin action, provided user data: %s", user.String())
+		log.Warnf("unauthorized attempt to access admin action, provided user data: %s", user.String())
 		return false
 	}
 
 	return true
 }
 
-func (au *AddUserCommand) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (au *AddUserCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, au.command), nil
 }
 
@@ -203,7 +203,8 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 
 	words := strings.Split(req.Message, " ")
 
-	if len(words) < 4 {
+	const expectedWordsCount = 4
+	if len(words) < expectedWordsCount {
 		log.Warnf("invalid user data provided: %q", req.Message)
 		return &msg.Response{
 			Message: "Invalid values provided, you need to provide all user details: login, platform and password as space separated values",
@@ -217,7 +218,7 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 	}
 
 	u := &CachedUser{
-		Uid:          uuid.NewString(),
+		UID:          uuid.NewString(),
 		Login:        words[1],
 		State:        UserUnverified,
 		PlatformName: words[2],
@@ -250,7 +251,7 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 	}, nil
 }
 
-func (au *AddUserCommand) GetHelp(ctx context.Context, req *msg.Request) string {
+func (au *AddUserCommand) GetHelp(_ context.Context, req *msg.Request) string {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
@@ -274,7 +275,7 @@ func NewListUsersCommand(us *UserStorage) *ListUsersCommand {
 	}
 }
 
-func (lu *ListUsersCommand) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (lu *ListUsersCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, lu.command), nil
 }
 
@@ -309,7 +310,7 @@ func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}, nil
 }
 
-func (lu *ListUsersCommand) GetHelp(ctx context.Context, req *msg.Request) string {
+func (lu *ListUsersCommand) GetHelp(_ context.Context, req *msg.Request) string {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
@@ -331,7 +332,7 @@ func NewDeleteUserCommand(us *UserStorage) *DeleteUserCommand {
 	}
 }
 
-func (du *DeleteUserCommand) CanHandle(ctx context.Context, req *msg.Request) (bool, error) {
+func (du *DeleteUserCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	return strings.HasPrefix(req.Message, du.command), nil
 }
 
@@ -344,8 +345,8 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 		return nil, errors.New("you need to be admin to delete a user")
 	}
 
-	inputId := utils.ExtractCommandValue(req.Message, du.command)
-	if inputId == "" {
+	inputID := utils.ExtractCommandValue(req.Message, du.command)
+	if inputID == "" {
 		log.Warnf("no user id provided in %q", req.Message)
 		return &msg.Response{
 			Message: "no user id provided",
@@ -358,30 +359,31 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 		return nil, err
 	}
 
-	for _, u := range users {
-		if u.Uid != inputId && u.Login != inputId {
+	for i, u := range users {
+		if u.UID != inputID && u.Login != inputID {
 			continue
 		}
 
-		log.Debugf("found user %s by id %s, will delete it", u.String(), inputId)
-		err := du.us.DeleteUser(ctx, &u)
+		log.Debugf("found user %s by id %s, will delete it", u.String(), inputID)
+
+		err := du.us.DeleteUser(ctx, &users[i])
 		if err != nil {
 			return nil, err
 		}
 
 		return &msg.Response{
-			Message: fmt.Sprintf("successfully deleted user %q", inputId),
+			Message: fmt.Sprintf("successfully deleted user %q", inputID),
 			Type:    msg.Success,
 		}, nil
 	}
 
 	return &msg.Response{
-		Message: fmt.Sprintf("didn't find user by %q", inputId),
+		Message: fmt.Sprintf("didn't find user by %q", inputID),
 		Type:    msg.Error,
 	}, nil
 }
 
-func (du *DeleteUserCommand) GetHelp(ctx context.Context, req *msg.Request) string {
+func (du *DeleteUserCommand) GetHelp(_ context.Context, req *msg.Request) string {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {

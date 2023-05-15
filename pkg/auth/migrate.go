@@ -22,7 +22,7 @@ func MigrateUsers(ctx context.Context, cfg *Config, us *UserStorage) error {
 		}
 
 		u := &CachedUser{
-			Uid:          uuid.NewString(),
+			UID:          uuid.NewString(),
 			Login:        u.Login,
 			State:        UserUnverified,
 			PlatformName: u.PlatformName,

@@ -24,7 +24,7 @@ func (m *Multi) Add(err error) {
 	m.errors = append(m.errors, err)
 }
 
-func (m *Multi) Err(format string, args ...interface{}) {
+func (m *Multi) Errf(format string, args ...interface{}) {
 	var e error
 	if len(args) == 0 {
 		e = errors.New(format)

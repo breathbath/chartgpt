@@ -1,11 +1,12 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+
 	"breathbathChatGPT/pkg/cmd"
 	"breathbathChatGPT/pkg/errs"
 	"breathbathChatGPT/pkg/utils"
-	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {

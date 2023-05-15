@@ -24,7 +24,7 @@ func NewBot(c *Config, r *msg.Router) (*Bot, error) {
 		return nil, validationErr
 	}
 
-	botApi, err := telebot.NewBot(telebot.Settings{
+	botAPI, err := telebot.NewBot(telebot.Settings{
 		Token: c.APIToken,
 		OnError: func(err error, c telebot.Context) {
 			errs.Handle(err, false)
@@ -34,7 +34,7 @@ func NewBot(c *Config, r *msg.Router) (*Bot, error) {
 		return nil, errors.Wrap(err, "failed to create telegram bot")
 	}
 
-	return &Bot{conf: c, baseBot: botApi, msgHandler: r}, nil
+	return &Bot{conf: c, baseBot: botAPI, msgHandler: r}, nil
 }
 
 func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
@@ -88,6 +88,32 @@ func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
 	}
 }
 
+func (b *Bot) sendMessageSuccess(
+	ctx context.Context,
+	telegramMsg telebot.Context,
+	resp *msg.Response,
+	senderOpts *telebot.SendOptions,
+) error {
+	log := logging.WithContext(ctx)
+
+	_, err := b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
+	if err != nil {
+		return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
+	}
+
+	if _, ok := resp.Meta["is_hidden_message"]; ok {
+		originalMsg := telegramMsg.Message()
+		deleteErr := b.baseBot.Delete(originalMsg)
+		if deleteErr != nil {
+			log.Errorf("failed to delete user message %d: %v", originalMsg.ID, deleteErr)
+		} else {
+			log.Infof("deleted user message %d as it contained a sensitive data", originalMsg.ID)
+		}
+	}
+
+	return nil
+}
+
 func (b *Bot) processResponseMessage(
 	ctx context.Context,
 	telegramMsg telebot.Context,
@@ -109,21 +135,6 @@ func (b *Bot) processResponseMessage(
 
 	var err error
 	switch resp.Type {
-	case msg.Success:
-		_, err = b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
-		if err != nil {
-			return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
-		}
-
-		if _, ok := resp.Meta["is_hidden_message"]; ok {
-			originalMsg := telegramMsg.Message()
-			deleteErr := b.baseBot.Delete(originalMsg)
-			if deleteErr != nil {
-				log.Errorf("failed to delete user message %d: %v", originalMsg.ID, deleteErr)
-			} else {
-				log.Infof("deleted user message %d as it contained a sensitive data", originalMsg.ID)
-			}
-		}
 	case msg.Error:
 		_, err = b.baseBot.Send(
 			telegramMsg.Sender(),
@@ -134,6 +145,12 @@ func (b *Bot) processResponseMessage(
 		if err != nil {
 			return errors.Wrapf(err, "failed to send error message: %s", resp.Message)
 		}
+	case msg.Success:
+		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
+	case msg.Undefined:
+		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
+	default:
+		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
 	}
 
 	return nil
