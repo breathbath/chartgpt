@@ -15,8 +15,9 @@ deploy:
 ## Deploy latest version
 	git reset --hard
 	git pull
-	docker-compose stop chatgpt
-	APP_VERSION=$(image_tag) docker-compose up -d chatgpt --remove-orphans
+	docker compose stop chatgpt
+	docker compose pull
+	APP_VERSION=$(image_tag) docker compose up -d chatgpt --remove-orphans
 
 .PHONY: tag
 tag:
