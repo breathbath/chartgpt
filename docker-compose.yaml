@@ -2,7 +2,7 @@ version: '3.3'
 services:
   chatgpt:
     container_name: chatgpt
-    image: breathbath/chatgpt
+    image: breathbath/chatgpt:${APP_VERSION}
     depends_on:
       - redis
     restart: always
