@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	URL                   = "https://api.openai.com"
-	CompletionsURL        = URL + "/v1/chat/completions"
-	ModelsURL             = URL + "/v1/models"
-	maxConversationLength = 5
+	URL                 = "https://api.openai.com"
+	CompletionsURL      = URL + "/v1/chat/completions"
+	ModelsURL           = URL + "/v1/models"
+	ConversationTimeout = time.Minute * 10
 )
 
 type ChatCompletionHandler struct {
@@ -39,6 +39,8 @@ func NewChatCompletionHandler(cfg *Config, db storage.Client, loader *Loader) (h
 }
 
 func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.Request) (*Conversation, error) {
+	log := logging.WithContext(ctx)
+
 	cacheKey := getConversationKey(req)
 	conversation := new(Conversation)
 	found, err := h.db.Load(ctx, cacheKey, conversation)
@@ -46,11 +48,29 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 		return nil, err
 	}
 
-	if !found || len(conversation.Messages) > maxConversationLength {
+	if !found || h.isConversationOutdated(conversation.Messages) {
+		log.Debug("the conversation is not found or outdated, will start a new conversation")
 		return &Conversation{ID: req.GetConversationID()}, nil
 	}
 
 	return conversation, nil
+}
+
+func (h *ChatCompletionHandler) getLastMessageTime(msgs []ConversationMessage) time.Time {
+	lastMessageTime := int64(0)
+	for _, message := range msgs {
+		if message.CreatedAt <= lastMessageTime {
+			continue
+		}
+		lastMessageTime = message.CreatedAt
+	}
+
+	return time.Unix(lastMessageTime, 0)
+}
+
+func (h *ChatCompletionHandler) isConversationOutdated(msgs []ConversationMessage) bool {
+	lastMessageTime := h.getLastMessageTime(msgs)
+	return lastMessageTime.Add(ConversationTimeout).Before(time.Now())
 }
 
 func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
