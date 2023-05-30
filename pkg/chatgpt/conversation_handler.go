@@ -13,7 +13,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const defaultConversationValidity = time.Minute * 30
+const (
+	defaultConversationValidity = time.Minute * 30
+	conversationVersion         = "v1"
+)
 
 type SetConversationContextHandler struct {
 	db      storage.Client
@@ -32,7 +35,7 @@ func (sc *SetConversationContextHandler) CanHandle(_ context.Context, req *msg.R
 }
 
 func getConversationKey(req *msg.Request) string {
-	return "chatgpt/conversation/" + req.GetConversationID()
+	return storage.GenerateCacheKey(conversationVersion, "chatgpt", "conversation", req.GetConversationID())
 }
 
 func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -59,7 +62,10 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 		conversation.Messages = []ConversationMessage{}
 	}
 
-	conversation.Context = conversationContext
+	conversation.Context = &Context{
+		Message:            conversationContext,
+		CreatedAtTimestamp: time.Now().Unix(),
+	}
 	log.Debugf("Going to save conversation context: %q", conversationContext)
 	conversation.ID = req.GetConversationID()
 

@@ -43,8 +43,10 @@ func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, err
 	reqsr.WithBearer(mc.cfg.APIKey)
 
 	const defaultModelsCacheValidityHours = 24
+	const modelsVersion = "v1"
 
-	reqsr.WithCache("chatgpt/models", mc.db, time.Hour*defaultModelsCacheValidityHours)
+	cacheKey := storage.GenerateCacheKey(modelsVersion, "chatgpt", "models", "rest")
+	reqsr.WithCache(cacheKey, mc.db, time.Hour*defaultModelsCacheValidityHours)
 
 	err := reqsr.Request(ctx)
 	if err != nil {

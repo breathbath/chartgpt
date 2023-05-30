@@ -108,7 +108,7 @@ func (c *RedisClient) Read(ctx context.Context, key string) (raw []byte, found b
 	}
 
 	if ctx.Value(IsNotLoggableContentCtxKey) != nil {
-		log.Debugf("successfully read data to redis under key %q", key)
+		log.Debugf("successfully read data from redis under key %q", key)
 	} else {
 		log.Debugf("successfully read data %q from redis under key %q", string(raw), key)
 	}
@@ -125,9 +125,9 @@ func (c *RedisClient) Write(ctx context.Context, key string, raw []byte, exp tim
 	}
 
 	if ctx.Value(IsNotLoggableContentCtxKey) != nil {
-		log.Debugf("wrote hidden data to redis under key %q", key)
+		log.Debugf("wrote hidden data to redis under key %q with timeout %v", key, exp)
 	} else {
-		log.Debugf("wrote data %q to redis under key %q", string(raw), key)
+		log.Debugf("wrote data %q to redis under key %q with timeout %v", string(raw), key, exp)
 	}
 
 	return nil

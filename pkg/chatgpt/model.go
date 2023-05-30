@@ -87,18 +87,39 @@ type ConversationMessage struct {
 	CreatedAt int64
 }
 
+type Context struct {
+	Message            string
+	CreatedAtTimestamp int64
+}
+
+func (c *Context) GetMessage() string {
+	if c == nil {
+		return ""
+	}
+
+	return c.Message
+}
+
+func (c *Context) GetCreatedAt() int64 {
+	if c == nil {
+		return 0
+	}
+
+	return c.CreatedAtTimestamp
+}
+
 type Conversation struct {
 	ID       string
-	Context  string
+	Context  *Context
 	Messages []ConversationMessage
 }
 
 func (c Conversation) ToRaw() []map[string]interface{} {
-	convResp := []map[string]interface{}{}
-	if c.Context != "" {
+	convResp := make([]map[string]interface{}, 0, len(c.Messages)+1)
+	if c.Context.GetMessage() != "" {
 		convResp = append(convResp, map[string]interface{}{
 			"role":    RoleSystem,
-			"content": c.Context,
+			"content": c.Context.GetMessage(),
 		})
 	}
 

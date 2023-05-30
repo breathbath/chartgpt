@@ -48,7 +48,7 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 		return nil, err
 	}
 
-	if !found || h.isConversationOutdated(conversation.Messages) {
+	if !found || h.isConversationOutdated(conversation) {
 		log.Debug("the conversation is not found or outdated, will start a new conversation")
 		return &Conversation{ID: req.GetConversationID()}, nil
 	}
@@ -68,8 +68,14 @@ func (h *ChatCompletionHandler) getLastMessageTime(msgs []ConversationMessage) t
 	return time.Unix(lastMessageTime, 0)
 }
 
-func (h *ChatCompletionHandler) isConversationOutdated(msgs []ConversationMessage) bool {
-	lastMessageTime := h.getLastMessageTime(msgs)
+func (h *ChatCompletionHandler) isConversationOutdated(conv *Conversation) bool {
+	// for the case when we started a conversation with a context but didn't send any messages yet
+	if len(conv.Messages) == 0 && conv.Context.GetMessage() != "" {
+		contextCreatedAt := time.Unix(conv.Context.GetCreatedAt(), 0)
+		return contextCreatedAt.Add(ConversationTimeout).Before(time.Now())
+	}
+
+	lastMessageTime := h.getLastMessageTime(conv.Messages)
 	return lastMessageTime.Add(ConversationTimeout).Before(time.Now())
 }
 

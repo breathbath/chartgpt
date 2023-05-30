@@ -119,14 +119,7 @@ func (us *UserStorage) DeleteUser(ctx context.Context, u *CachedUser) error {
 }
 
 func (us *UserStorage) generateUserCacheKey(platform, login string) string {
-	parts := []string{
-		usersPrefix,
-		usersVersion,
-		strings.ToLower(platform),
-		strings.ToLower(login),
-	}
-
-	return strings.Join(parts, "/")
+	return storage.GenerateCacheKey(usersVersion, platform, usersPrefix, login)
 }
 
 type UserMiddleware struct {

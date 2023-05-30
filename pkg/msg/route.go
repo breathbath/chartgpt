@@ -20,18 +20,18 @@ func (ch *Router) UseMiddleware(m Middleware) {
 }
 
 func (ch *Router) Route(ctx context.Context, req *Request) (*Response, error) {
-	for _, h := range ch.Handlers {
-		for _, m := range ch.Middlewares {
-			resp, err := m.Handle(ctx, req)
-			if err != nil {
-				return nil, err
-			}
-
-			if resp != nil {
-				return resp, nil
-			}
+	for _, m := range ch.Middlewares {
+		resp, err := m.Handle(ctx, req)
+		if err != nil {
+			return nil, err
 		}
 
+		if resp != nil {
+			return resp, nil
+		}
+	}
+
+	for _, h := range ch.Handlers {
 		canHandle, err := h.CanHandle(ctx, req)
 		if err != nil {
 			return nil, err

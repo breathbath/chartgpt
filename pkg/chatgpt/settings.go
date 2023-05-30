@@ -11,7 +11,10 @@ import (
 	logging "github.com/sirupsen/logrus"
 )
 
-const ModelChangeDuration = time.Minute * 10
+const (
+	ModelChangeDuration = time.Minute * 10
+	modelVersion        = "v1"
+)
 
 type Loader struct {
 	db  storage.Client
@@ -48,7 +51,7 @@ func (l *Loader) LoadModel(ctx context.Context, req *msg.Request) *ConfiguredMod
 }
 
 func (l *Loader) getModelKey(req *msg.Request) string {
-	return "chatgpt/model/" + req.GetConversationID()
+	return storage.GenerateCacheKey(modelVersion, "chatgpt", "model", req.GetConversationID())
 }
 
 func (l *Loader) SaveModel(ctx context.Context, m *ConfiguredModel, req *msg.Request) error {
