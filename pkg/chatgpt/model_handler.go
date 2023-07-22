@@ -17,8 +17,8 @@ import (
 
 type SetModelHandler struct {
 	ModelCommand
-	command string
-	loader  *Loader
+	commands []string
+	loader   *Loader
 }
 
 func NewSetModelHandler(cfg *Config, db storage.Client, loader *Loader) *SetModelHandler {
@@ -27,8 +27,8 @@ func NewSetModelHandler(cfg *Config, db storage.Client, loader *Loader) *SetMode
 			cfg: cfg,
 			db:  db,
 		},
-		command: "/setmodel",
-		loader:  loader,
+		commands: []string{"/setmodel", "/model", "/savemodel"},
+		loader:   loader,
 	}
 }
 
@@ -62,13 +62,25 @@ func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, err
 }
 
 func (smc *SetModelHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, smc.command), nil
+	for _, c := range smc.commands {
+		if strings.HasPrefix(req.Message, c) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	modelName := utils.ExtractCommandValue(req.Message, smc.command)
+	modelName := ""
+	for _, c := range smc.commands {
+		modelName = utils.ExtractCommandValue(req.Message, c)
+		if modelName != "" {
+			break
+		}
+	}
+
 	if modelName == "" {
 		return &msg.Response{
 			Message: "empty model name provided",
@@ -105,7 +117,7 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 }
 
 func (smc *SetModelHandler) GetHelp(context.Context, *msg.Request) string {
-	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", smc.command)
+	return fmt.Sprintf("%s #modelName#: to change the active ChatGPT model", strings.Join(smc.commands, "|"))
 }
 
 func (smc *SetModelHandler) isModelSupported(ctx context.Context, modelName string) (bool, error) {
