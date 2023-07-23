@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"breathbathChatGPT/pkg/help"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/utils"
@@ -182,7 +184,7 @@ func CheckAdmin(ctx context.Context, req *msg.Request) bool {
 }
 
 func (au *AddUserCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, au.command), nil
+	return utils.MatchesCommand(req.Message, au.command), nil
 }
 
 func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -235,25 +237,28 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 
 	log.Debug("successfully added the user")
 
+	op := &msg.Options{}
+	op.WithIsResponseToHiddenMessage()
+
 	return &msg.Response{
 		Message: "successfully added user",
 		Type:    msg.Success,
-		Meta: map[string]interface{}{
-			"is_hidden_message": true,
-		},
+		Options: op,
 	}, nil
 }
 
-func (au *AddUserCommand) GetHelp(_ context.Context, req *msg.Request) string {
+func (au *AddUserCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
-		return ""
+		return help.Result{}
 	}
 
-	return fmt.Sprintf(`%s #login# #platform# #password#: adds a new user, 
+	text := fmt.Sprintf(`%s #login# #platform# #password#: adds a new user, 
 if success the initial message will be deleted for security reasons
 to add a telegram user use your telegram user name without the at sign as #login# and 'telegram' as #platform#`, au.command)
+
+	return help.Result{Text: text}
 }
 
 type ListUsersCommand struct {
@@ -303,14 +308,16 @@ func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}, nil
 }
 
-func (lu *ListUsersCommand) GetHelp(_ context.Context, req *msg.Request) string {
+func (lu *ListUsersCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
-		return ""
+		return help.Result{}
 	}
 
-	return fmt.Sprintf(`%s: lists current users`, lu.command)
+	text := fmt.Sprintf(`%s: lists current users`, lu.command)
+
+	return help.Result{Text: text}
 }
 
 type DeleteUserCommand struct {
@@ -376,12 +383,14 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	}, nil
 }
 
-func (du *DeleteUserCommand) GetHelp(_ context.Context, req *msg.Request) string {
+func (du *DeleteUserCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
 	user := GetUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
-		return ""
+		return help.Result{}
 	}
 
-	return fmt.Sprintf(`%s #user id or login#: deletes the requested user`, du.command)
+	text := fmt.Sprintf(`%s #user id or login#: deletes the requested user`, du.command)
+
+	return help.Result{Text: text}
 }

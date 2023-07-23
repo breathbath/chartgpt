@@ -53,7 +53,6 @@ func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
 
 	helpHandler := &help.Handler{
 		Providers: []help.Provider{
-			logoutHandler,
 			setModelHandler,
 			setConversationCtxHandler,
 			getModelsHandler,
@@ -61,6 +60,7 @@ func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
 			addUserHandler,
 			listUsersHandler,
 			deleteUsersHandler,
+			logoutHandler,
 		},
 	}
 

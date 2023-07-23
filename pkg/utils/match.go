@@ -15,3 +15,19 @@ func ExtractCommandValue(rawMsg, command string) string {
 
 	return strings.TrimSpace(foundResults[1])
 }
+
+func MatchesCommands(msg string, commands []string) bool {
+	for _, command := range commands {
+		if MatchesCommand(msg, command) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func MatchesCommand(msg, command string) bool {
+	command = strings.TrimPrefix(command, "/")
+	re := regexp.MustCompile(fmt.Sprintf(`^/\b%s\b`, command))
+	return re.MatchString(msg)
+}

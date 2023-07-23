@@ -2,15 +2,15 @@ package telegram
 
 import (
 	"context"
-	"strings"
 
 	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/utils"
 )
 
 type StartHandler struct{}
 
 func (sh *StartHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, "/start"), nil
+	return utils.MatchesCommand(req.Message, "/start"), nil
 }
 
 func (sh *StartHandler) Handle(context.Context, *msg.Request) (*msg.Response, error) {

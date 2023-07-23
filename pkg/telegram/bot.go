@@ -71,18 +71,15 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 }
 
 func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
-	formatI, ok := resp.Meta["format"]
-	if !ok {
-		return telebot.ModeDefault
-	}
-
-	switch fmt.Sprint(formatI) {
-	case "md":
+	switch resp.Options.GetFormat() {
+	case msg.OutputFormatMarkdown1:
 		return telebot.ModeMarkdown
-	case "md2":
+	case msg.OutputFormatMarkdown2:
 		return telebot.ModeMarkdownV2
-	case "html":
+	case msg.OutputFormatHTML:
 		return telebot.ModeHTML
+	case msg.OutputFormatUndefined:
+		return telebot.ModeDefault
 	default:
 		return telebot.ModeDefault
 	}
@@ -101,7 +98,7 @@ func (b *Bot) sendMessageSuccess(
 		return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
 	}
 
-	if _, ok := resp.Meta["is_hidden_message"]; ok {
+	if resp.Options.IsResponseToHiddenMessage() {
 		originalMsg := telegramMsg.Message()
 		deleteErr := b.baseBot.Delete(originalMsg)
 		if deleteErr != nil {
@@ -132,6 +129,27 @@ func (b *Bot) processResponseMessage(
 
 	log.Debugf("telegram sender options: %+v", senderOpts)
 	log.Debugf("telegram message:\n%q", resp.Message)
+
+	replyButtons := make([]telebot.ReplyButton, 0)
+	for _, predefinedResp := range resp.Options.GetPredefinedResponses() {
+		if predefinedResp == "" {
+			continue
+		}
+		replyButtons = append(replyButtons, telebot.ReplyButton{
+			Text: string(predefinedResp),
+		})
+	}
+
+	if len(replyButtons) > 0 {
+		rm := &telebot.ReplyMarkup{
+			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
+			ReplyKeyboard: [][]telebot.ReplyButton{
+				replyButtons,
+			},
+			ResizeKeyboard: true,
+		}
+		senderOpts.ReplyMarkup = rm
+	}
 
 	var err error
 	switch resp.Type {

@@ -48,5 +48,5 @@ const (
 type Response struct {
 	Message string
 	Type    Type
-	Meta    map[string]interface{}
+	Options *Options
 }

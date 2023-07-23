@@ -62,12 +62,13 @@ func (lh *LoginHandler) handleNotVerifiedUser(
 		return nil, err
 	}
 
+	op := &msg.Options{}
+	op.WithIsResponseToHiddenMessage()
+
 	return &msg.Response{
 		Message: "Password is correct, you can continue using bot. Will delete the message with password for security reasons.",
 		Type:    msg.Success,
-		Meta: map[string]interface{}{
-			"is_hidden_message": true,
-		},
+		Options: op,
 	}, nil
 }
 

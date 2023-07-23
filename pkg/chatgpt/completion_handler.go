@@ -140,10 +140,6 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	return &msg.Response{
 		Message: strings.Join(messages, "/n"),
 		Type:    msg.Success,
-		Meta: map[string]interface{}{
-			"created": chatResp.CreatedAt,
-			"format":  "",
-		},
 	}, nil
 }
 

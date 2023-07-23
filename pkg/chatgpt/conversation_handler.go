@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"breathbathChatGPT/pkg/help"
+
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/utils"
@@ -81,12 +83,14 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	}, nil
 }
 
-func (sc *SetConversationContextHandler) GetHelp(context.Context, *msg.Request) string {
-	return fmt.Sprintf(
+func (sc *SetConversationContextHandler) GetHelp(context.Context, *msg.Request) help.Result {
+	text := fmt.Sprintf(
 		"%s #text#: to set context for the current conversation (see setting system role message "+
 			"https://platform.openai.com/docs/guides/chat/introduction)",
 		sc.command,
 	)
+
+	return help.Result{Text: text}
 }
 
 type ResetConversationHandler struct {
@@ -102,7 +106,7 @@ func NewResetConversationHandler(db storage.Client) *ResetConversationHandler {
 }
 
 func (sc *ResetConversationHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, sc.command), nil
+	return utils.MatchesCommand(req.Message, sc.command), nil
 }
 
 func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -124,6 +128,8 @@ func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request
 	}, nil
 }
 
-func (sc *ResetConversationHandler) GetHelp(context.Context, *msg.Request) string {
-	return fmt.Sprintf("%s: to reset your conversation", sc.command)
+func (sc *ResetConversationHandler) GetHelp(context.Context, *msg.Request) help.Result {
+	text := fmt.Sprintf("%s: to reset your conversation", sc.command)
+
+	return help.Result{Text: text, PredefinedOption: sc.command}
 }
