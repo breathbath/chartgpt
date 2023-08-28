@@ -76,10 +76,11 @@ func (us *UserStorage) ReadUserFromStorage(ctx context.Context, platform, userID
 	return u, nil
 }
 
-func (us *UserStorage) ReadUsersFromStorage(ctx context.Context) (users []CachedUser, err error) {
+func (us *UserStorage) ReadUsersFromStorage(ctx context.Context, platform string) (users []CachedUser, err error) {
 	parts := []string{
-		usersPrefix,
 		usersVersion,
+		platform,
+		usersPrefix,
 		"*",
 	}
 
@@ -286,7 +287,7 @@ func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 		return nil, errors.New("you need to be admin to add a user")
 	}
 
-	users, err := lu.us.ReadUsersFromStorage(ctx)
+	users, err := lu.us.ReadUsersFromStorage(ctx, "telegram")
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +355,7 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 		}, nil
 	}
 
-	users, err := du.us.ReadUsersFromStorage(ctx)
+	users, err := du.us.ReadUsersFromStorage(ctx, "telegram")
 	if err != nil {
 		return nil, err
 	}
