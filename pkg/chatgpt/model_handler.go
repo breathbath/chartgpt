@@ -19,18 +19,28 @@ import (
 
 type SetModelHandler struct {
 	ModelCommand
-	commands []string
-	loader   *Loader
+	commands      []string
+	loader        *Loader
+	modeDetector  func() bool
+	adminDetector func(req *msg.Request) bool
 }
 
-func NewSetModelHandler(cfg *Config, db storage.Client, loader *Loader) *SetModelHandler {
+func NewSetModelHandler(
+	cfg *Config,
+	db storage.Client,
+	loader *Loader,
+	modeDetector func() bool,
+	adminDetector func(req *msg.Request) bool,
+) *SetModelHandler {
 	return &SetModelHandler{
 		ModelCommand: ModelCommand{
 			cfg: cfg,
 			db:  db,
 		},
-		commands: []string{"/setmodel", "/model", "/savemodel"},
-		loader:   loader,
+		commands:      []string{"/setmodel", "/model", "/savemodel"},
+		loader:        loader,
+		modeDetector:  modeDetector,
+		adminDetector: adminDetector,
 	}
 }
 
@@ -64,7 +74,15 @@ func (mc *ModelCommand) getSupportedModelIDs(ctx context.Context) ([]string, err
 }
 
 func (smc *SetModelHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return utils.MatchesCommands(req.Message, smc.commands), nil
+	if !utils.MatchesCommands(req.Message, smc.commands) {
+		return false, nil
+	}
+
+	if smc.modeDetector() && !smc.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
@@ -136,23 +154,41 @@ func (smc *SetModelHandler) isModelSupported(ctx context.Context, modelName stri
 
 type GetModelsCommand struct {
 	ModelCommand
-	command string
-	loader  *Loader
+	command       string
+	loader        *Loader
+	modeDetector  func() bool
+	adminDetector func(req *msg.Request) bool
 }
 
-func NewGetModelsCommand(cfg *Config, db storage.Client, loader *Loader) *GetModelsCommand {
+func NewGetModelsCommand(
+	cfg *Config,
+	db storage.Client,
+	loader *Loader,
+	modeDetector func() bool,
+	adminDetector func(req *msg.Request) bool,
+) *GetModelsCommand {
 	return &GetModelsCommand{
 		ModelCommand: ModelCommand{
 			cfg: cfg,
 			db:  db,
 		},
-		command: "/models",
-		loader:  loader,
+		command:       "/models",
+		loader:        loader,
+		modeDetector:  modeDetector,
+		adminDetector: adminDetector,
 	}
 }
 
 func (gmc *GetModelsCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return utils.MatchesCommand(req.Message, gmc.command), nil
+	if !utils.MatchesCommand(req.Message, gmc.command) {
+		return false, nil
+	}
+
+	if gmc.modeDetector() && !gmc.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {

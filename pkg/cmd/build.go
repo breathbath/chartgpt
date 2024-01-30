@@ -23,46 +23,54 @@ func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
 
 	startHandler := &telegram.StartHandler{}
 
-	setConversationCtxHandler := chatgpt.NewSetConversationContextCommand(db)
-	resetConversationHandler := chatgpt.NewResetConversationHandler(db)
-
 	chartGptCfg, err := chatgpt.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
+
+	isScopedModeFunc := func() bool {
+		return chartGptCfg.ScopedMode
+	}
+
+	isAdminDetector := func(req *msg.Request) bool {
+		usr := auth.GetUserFromReq(req)
+		return usr != nil && usr.Role == auth.AdminRole
+	}
+
+	setConversationCtxHandler := chatgpt.NewSetConversationContextCommand(db, isScopedModeFunc, isAdminDetector)
+	resetConversationHandler := chatgpt.NewResetConversationHandler(db, isScopedModeFunc, isAdminDetector)
 
 	validationErr := chartGptCfg.Validate()
 	if validationErr.HasErrors() {
 		return nil, validationErr
 	}
 
-	loader := chatgpt.NewSettingsLoader(db, chartGptCfg)
+	loader := chatgpt.NewSettingsLoader(db, chartGptCfg, isScopedModeFunc)
 
-	setModelHandler := chatgpt.NewSetModelHandler(chartGptCfg, db, loader)
+	setModelHandler := chatgpt.NewSetModelHandler(chartGptCfg, db, loader, isScopedModeFunc, isAdminDetector)
 
-	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, db, loader)
+	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, db, loader, isScopedModeFunc, isAdminDetector)
 
-	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(chartGptCfg, db, loader)
+	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(chartGptCfg, db, loader, isScopedModeFunc)
 	if err != nil {
 		return nil, err
 	}
 
-	addUserHandler := auth.NewAddUserCommand(us)
-	listUsersHandler := auth.NewListUsersCommand(us)
-	deleteUsersHandler := auth.NewDeleteUserCommand(us)
+	addUserHandler := auth.NewAddUserCommand(us, isAdminDetector)
+	listUsersHandler := auth.NewListUsersCommand(us, isAdminDetector)
+	deleteUsersHandler := auth.NewDeleteUserCommand(us, isAdminDetector)
 
-	helpHandler := &help.Handler{
-		Providers: []help.Provider{
-			setModelHandler,
-			setConversationCtxHandler,
-			getModelsHandler,
-			resetConversationHandler,
-			addUserHandler,
-			listUsersHandler,
-			deleteUsersHandler,
-			logoutHandler,
-		},
+	helpProviders := []help.Provider{
+		setModelHandler,
+		setConversationCtxHandler,
+		getModelsHandler,
+		resetConversationHandler,
+		addUserHandler,
+		listUsersHandler,
+		deleteUsersHandler,
+		logoutHandler,
 	}
+	helpHandler := help.NewHandler(isScopedModeFunc, isAdminDetector, helpProviders)
 
 	r := &msg.Router{
 		Handlers: []msg.Handler{

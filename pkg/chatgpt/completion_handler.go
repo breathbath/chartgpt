@@ -23,9 +23,15 @@ type ChatCompletionHandler struct {
 	cfg            *Config
 	settingsLoader *Loader
 	db             storage.Client
+	isScopedMode   func() bool
 }
 
-func NewChatCompletionHandler(cfg *Config, db storage.Client, loader *Loader) (h *ChatCompletionHandler, err error) {
+func NewChatCompletionHandler(
+	cfg *Config,
+	db storage.Client,
+	loader *Loader,
+	isScopedMode func() bool,
+) (h *ChatCompletionHandler, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
 		return nil, e
@@ -35,11 +41,17 @@ func NewChatCompletionHandler(cfg *Config, db storage.Client, loader *Loader) (h
 		cfg:            cfg,
 		db:             db,
 		settingsLoader: loader,
+		isScopedMode:   isScopedMode,
 	}, nil
 }
 
 func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.Request) (*Conversation, error) {
 	log := logging.WithContext(ctx)
+
+	conversationContext, err := h.buildConversationContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	cacheKey := getConversationKey(req)
 	conversation := new(Conversation)
@@ -50,10 +62,31 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 
 	if !found || h.isConversationOutdated(conversation) {
 		log.Debug("the conversation is not found or outdated, will start a new conversation")
-		return &Conversation{ID: req.GetConversationID()}, nil
+		return &Conversation{ID: req.GetConversationID(), Context: conversationContext}, nil
 	}
 
+	conversation.Context = conversationContext
+
 	return conversation, nil
+}
+
+func (h *ChatCompletionHandler) buildConversationContext(ctx context.Context) (*Context, error) {
+	key := ""
+	if h.isScopedMode() {
+		key = getGlobalConversationContextKey()
+	}
+
+	conversationContext := new(Context)
+	found, err := h.db.Load(ctx, key, conversationContext)
+	if err != nil {
+		return nil, err
+	}
+
+	if !found {
+		return &Context{}, nil
+	}
+
+	return conversationContext, nil
 }
 
 func (h *ChatCompletionHandler) getLastMessageTime(msgs []ConversationMessage) time.Time {

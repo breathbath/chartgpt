@@ -19,11 +19,29 @@ type Provider interface {
 }
 
 type Handler struct {
-	Providers []Provider
+	Providers     []Provider
+	AdminDetector func(req *msg.Request) bool
+	ModeDetector  func() bool
+}
+
+func NewHandler(modeDetector func() bool, adminDetector func(req *msg.Request) bool, providers []Provider) *Handler {
+	return &Handler{
+		Providers:     providers,
+		AdminDetector: adminDetector,
+		ModeDetector:  modeDetector,
+	}
 }
 
 func (ch *Handler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return utils.MatchesCommand(req.Message, helpCommand), nil
+	if !utils.MatchesCommand(req.Message, helpCommand) {
+		return false, nil
+	}
+
+	if ch.ModeDetector() && !ch.AdminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {

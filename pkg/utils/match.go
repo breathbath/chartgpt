@@ -7,7 +7,7 @@ import (
 )
 
 func ExtractCommandValue(rawMsg, command string) string {
-	r := regexp.MustCompile(fmt.Sprintf(`^%s($|\s.*)`, command))
+	r := regexp.MustCompile(fmt.Sprintf(`(?s)^%s($|\s.*)`, command))
 	foundResults := r.FindStringSubmatch(rawMsg)
 	if len(foundResults) == 0 {
 		return ""

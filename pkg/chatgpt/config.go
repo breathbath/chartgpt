@@ -10,6 +10,7 @@ import (
 type Config struct {
 	APIKey       string `envconfig:"CHATGPT_API_KEY"`
 	DefaultModel string `envconfig:"CHATGPT_DEFAULT_MODEL"`
+	ScopedMode   bool   `envconfig:"CHATGPT_SCOPED_MODE"`
 }
 
 func (c *Config) Validate() *errs.Multi {

@@ -160,42 +160,38 @@ func (um UserMiddleware) Handle(ctx context.Context, req *msg.Request) (*msg.Res
 }
 
 type AddUserCommand struct {
-	command string
-	us      *UserStorage
+	command       string
+	us            *UserStorage
+	adminDetector func(req *msg.Request) bool
 }
 
-func NewAddUserCommand(us *UserStorage) *AddUserCommand {
+func NewAddUserCommand(
+	us *UserStorage,
+	adminDetector func(req *msg.Request) bool,
+) *AddUserCommand {
 	return &AddUserCommand{
-		command: "/adduser",
-		us:      us,
+		command:       "/adduser",
+		us:            us,
+		adminDetector: adminDetector,
 	}
-}
-
-func CheckAdmin(ctx context.Context, req *msg.Request) bool {
-	log := logrus.WithContext(ctx)
-
-	user := GetUserFromReq(req)
-
-	if user == nil || user.Role != AdminRole {
-		log.Warnf("unauthorized attempt to access admin action, provided user data: %s", user.String())
-		return false
-	}
-
-	return true
 }
 
 func (au *AddUserCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return utils.MatchesCommand(req.Message, au.command), nil
+	if !utils.MatchesCommand(req.Message, au.command) {
+		return false, nil
+	}
+
+	if !au.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
 	log.Debug("got add user request")
-
-	if !CheckAdmin(ctx, req) {
-		return nil, errors.New("you need to be admin to add a user")
-	}
 
 	words := strings.Split(req.Message, " ")
 
@@ -215,7 +211,7 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 
 	u := &CachedUser{
 		UID:          uuid.NewString(),
-		Login:        words[1],
+		Login:        strings.TrimPrefix(words[1], "@"),
 		State:        UserUnverified,
 		PlatformName: words[2],
 		Role:         UserRole,
@@ -230,6 +226,17 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 		u.Role,
 		len(words[3]),
 	)
+
+	cachedUser, err := au.us.ReadUserFromStorage(ctx, u.PlatformName, u.Login)
+	if err != nil {
+		return nil, err
+	}
+	if cachedUser != nil && cachedUser.Role == AdminRole {
+		return &msg.Response{
+			Message: "Cannot downgrade user role from admin to user",
+			Type:    msg.Error,
+		}, nil
+	}
 
 	err = au.us.WriteUserToStorage(ctx, u)
 	if err != nil {
@@ -263,29 +270,38 @@ to add a telegram user use your telegram user name without the at sign as #login
 }
 
 type ListUsersCommand struct {
-	command string
-	us      *UserStorage
+	command       string
+	us            *UserStorage
+	adminDetector func(req *msg.Request) bool
 }
 
-func NewListUsersCommand(us *UserStorage) *ListUsersCommand {
+func NewListUsersCommand(
+	us *UserStorage,
+	adminDetector func(req *msg.Request) bool,
+) *ListUsersCommand {
 	return &ListUsersCommand{
-		command: "/users",
-		us:      us,
+		command:       "/users",
+		us:            us,
+		adminDetector: adminDetector,
 	}
 }
 
 func (lu *ListUsersCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, lu.command), nil
+	if !strings.HasPrefix(req.Message, lu.command) {
+		return false, nil
+	}
+
+	if !lu.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
 	log.Debug("got list users request")
-
-	if !CheckAdmin(ctx, req) {
-		return nil, errors.New("you need to be admin to add a user")
-	}
 
 	users, err := lu.us.ReadUsersFromStorage(ctx, "telegram")
 	if err != nil {
@@ -322,29 +338,38 @@ func (lu *ListUsersCommand) GetHelp(_ context.Context, req *msg.Request) help.Re
 }
 
 type DeleteUserCommand struct {
-	command string
-	us      *UserStorage
+	command       string
+	us            *UserStorage
+	adminDetector func(req *msg.Request) bool
 }
 
-func NewDeleteUserCommand(us *UserStorage) *DeleteUserCommand {
+func NewDeleteUserCommand(
+	us *UserStorage,
+	adminDetector func(req *msg.Request) bool,
+) *DeleteUserCommand {
 	return &DeleteUserCommand{
-		command: "/deluser",
-		us:      us,
+		command:       "/deluser",
+		us:            us,
+		adminDetector: adminDetector,
 	}
 }
 
 func (du *DeleteUserCommand) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	return strings.HasPrefix(req.Message, du.command), nil
+	if !strings.HasPrefix(req.Message, du.command) {
+		return false, nil
+	}
+
+	if !du.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
 	log.Debug("got delete user request")
-
-	if !CheckAdmin(ctx, req) {
-		return nil, errors.New("you need to be admin to delete a user")
-	}
 
 	inputID := utils.ExtractCommandValue(req.Message, du.command)
 	if inputID == "" {

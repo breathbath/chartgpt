@@ -1,30 +1,29 @@
 package chatgpt
 
 import (
-	"context"
-	"time"
-
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
+	"context"
 
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 )
 
 const (
-	ModelChangeDuration = time.Minute * 10
-	modelVersion        = "v1"
+	modelVersion = "v1"
 )
 
 type Loader struct {
-	db  storage.Client
-	cfg *Config
+	db           storage.Client
+	cfg          *Config
+	isScopedMode func() bool
 }
 
-func NewSettingsLoader(db storage.Client, cfg *Config) *Loader {
+func NewSettingsLoader(db storage.Client, cfg *Config, isScopedMode func() bool) *Loader {
 	return &Loader{
-		db:  db,
-		cfg: cfg,
+		db:           db,
+		cfg:          cfg,
+		isScopedMode: isScopedMode,
 	}
 }
 
@@ -51,6 +50,10 @@ func (l *Loader) LoadModel(ctx context.Context, req *msg.Request) *ConfiguredMod
 }
 
 func (l *Loader) getModelKey(req *msg.Request) string {
+	if l.isScopedMode() {
+		return storage.GenerateCacheKey(modelVersion, "chatgpt", "model_glob")
+	}
+
 	return storage.GenerateCacheKey(modelVersion, "chatgpt", "model", req.GetConversationID())
 }
 
@@ -62,12 +65,12 @@ func (l *Loader) SaveModel(ctx context.Context, m *ConfiguredModel, req *msg.Req
 	}
 
 	key := l.getModelKey(req)
-	err := l.db.Save(ctx, key, m, ModelChangeDuration)
+	err := l.db.Save(ctx, key, m, 0)
 	if err != nil {
 		return err
 	}
 
-	log.Debugf("saved current model setting, key: %q, valid till: %v, model: %q", key, ModelChangeDuration, m.Model)
+	log.Debugf("saved current model setting, key: %q, model: %q", key, m.Model)
 
 	return nil
 }
