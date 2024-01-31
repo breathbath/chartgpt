@@ -160,37 +160,37 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 								"type": "string",
 								"enum": []string{"Белое", "Розовое", "Красное", "Оранжевое"},
 							},
-							"год": map[string]interface{}{
-								"type": "number",
-							},
+							//"год": map[string]interface{}{
+							//	"type": "number",
+							//},
 							"сахар": map[string]interface{}{
 								"type": "string",
 								"enum": []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"},
 							},
-							"крепость": map[string]interface{}{
-								"type": "string",
-								"enum": []string{"крепкое", "легкое", "среднекрепкое"},
-							},
-							"подходящие блюда": map[string]interface{}{
-								"type": "array",
-								"items": map[string]interface{}{
-									"type": "string",
-								},
-							},
-							"тело": map[string]interface{}{
-								"type": "string",
-								"enum": []string{"среднее", "легкое", "полнотелое"},
-							},
-							"название": map[string]interface{}{
-								"type": "string",
-							},
+							//"крепость": map[string]interface{}{
+							//	"type": "string",
+							//	"enum": []string{"крепкое", "легкое", "среднекрепкое"},
+							//},
+							//"подходящие блюда": map[string]interface{}{
+							//	"type": "array",
+							//	"items": map[string]interface{}{
+							//		"type": "string",
+							//	},
+							//},
+							//"тело": map[string]interface{}{
+							//	"type": "string",
+							//	"enum": []string{"среднее", "легкое", "полнотелое"},
+							//},
+							//"название": map[string]interface{}{
+							//	"type": "string",
+							//},
 							"страна": map[string]interface{}{
 								"type": "string",
 							},
-							"цена": map[string]interface{}{
-								"type": "string",
-								"enum": []string{"массовое", "бюджетное", "премиальное", "коллекционное"},
-							},
+							//"цена": map[string]interface{}{
+							//	"type": "string",
+							//	"enum": []string{"массовое", "бюджетное", "премиальное", "коллекционное"},
+							//},
 						},
 						"required": []string{"цвет", "сахар"},
 					},
@@ -276,7 +276,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
 }
 
-const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года и дальше текст описания, в конце выдавай информацию о цене. Не повторяй название вина больше одного раза.`
+const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания, в конце выдавай информацию о цене. Не повторяй название вина больше одного раза.`
 
 func (h *ChatCompletionHandler) callFindWine(
 	ctx context.Context,
@@ -300,14 +300,37 @@ func (h *ChatCompletionHandler) callFindWine(
 
 	logging.Debugf("Function call: %q", string(arguments))
 
-	w, err := h.findByCriteria(
-		fmt.Sprint(argumentsMap["цвет"]),
-		fmt.Sprint(argumentsMap["сахар"]),
-		fmt.Sprint(argumentsMap["страна"]),
+	color := ""
+	if argumentsMap["цвет"] != nil {
+		color = fmt.Sprint(argumentsMap["цвет"])
+	}
+
+	sugar := ""
+	if argumentsMap["сахар"] != nil {
+		sugar = fmt.Sprint(argumentsMap["сахар"])
+	}
+
+	country := ""
+	if argumentsMap["страна"] != nil {
+		country = fmt.Sprint(argumentsMap["страна"])
+	}
+	found, w, err := h.findByCriteria(
+		color,
+		sugar,
+		country,
 	)
 
 	if err != nil {
 		return responseMessage, err
+	}
+
+	if !found {
+		*history = append(*history, ConversationMessage{
+			Role:      RoleAssistant,
+			Text:      "Ничего не найдено",
+			CreatedAt: time.Now().Unix(),
+		})
+		return "Ничего не найдено", nil
 	}
 
 	text, err := h.generateWineAnswer(ctx, req, w, model)
@@ -384,15 +407,15 @@ func (h *ChatCompletionHandler) CanHandle(context.Context, *msg.Request) (bool, 
 	return true, nil
 }
 
-func (h *ChatCompletionHandler) findByCriteria(color string, sugar string, country string) (w Wine, err error) {
+func (h *ChatCompletionHandler) findByCriteria(color string, sugar string, country string) (found bool, w Wine, err error) {
 	config, err := db.LoadConfig()
 	if err != nil {
-		return w, err
+		return false, w, err
 	}
 
 	conn, err := sqlx.Open("mysql", config.ConnString)
 	if err != nil {
-		return w, err
+		return false, w, err
 	}
 
 	defer conn.Close()
@@ -425,32 +448,20 @@ func (h *ChatCompletionHandler) findByCriteria(color string, sugar string, count
 
 	results, err := conn.NamedQuery(q, params)
 	if err != nil {
-		return w, err
+		return false, w, err
 	}
 
 	for results.Next() {
 		var w Wine
 		err = results.StructScan(&w)
 		if err != nil {
-			return w, err
+			return false, w, err
 		}
 
-		return w, nil
+		return true, w, nil
 	}
 
-	q = fmt.Sprintf(query, "")
-	rows, err := conn.Queryx(q)
-	for rows.Next() {
-		var w Wine
-		err := rows.StructScan(&w)
-		if err != nil {
-			return w, err
-		}
-
-		return w, nil
-	}
-
-	return w, errors.New("no wines found")
+	return false, w, nil
 }
 
 type Wine struct {
