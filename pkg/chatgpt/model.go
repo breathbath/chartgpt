@@ -3,18 +3,16 @@ package chatgpt
 import "encoding/json"
 
 type ChatCompletionResponse struct {
-	ID         string                   `json:"id"`
-	Object     string                   `json:"object"`
-	CreatedAt  int64                    `json:"created"`
-	Model      string                   `json:"model"`
-	Choices    []ChatCompletionChoice   `json:"choices"`
-	Prompt     string                   `json:"prompt"`
-	Completion ChatCompletionCompletion `json:"completion"`
-	Usage      ChatCompletionUsage      `json:"usage"`
+	ID                string                 `json:"id"`
+	Object            string                 `json:"object"`
+	CreatedAt         int64                  `json:"created"`
+	Model             string                 `json:"model"`
+	Choices           []ChatCompletionChoice `json:"choices"`
+	Usage             ChatCompletionUsage    `json:"usage"`
+	SystemFingerprint string                 `json:"system_fingerprint"`
 }
 
 type ChatCompletionChoice struct {
-	Text         string                 `json:"text"`
 	Index        int                    `json:"index"`
 	Logprobs     ChatCompletionLogprobs `json:"logprobs"`
 	FinishReason string                 `json:"finish_reason"`
@@ -22,9 +20,14 @@ type ChatCompletionChoice struct {
 }
 
 type ChatCompletionLogprobs struct {
-	Tokens        []string      `json:"tokens"`
-	TokenLogprobs []float64     `json:"token_logprobs"`
-	TopLogprobs   []interface{} `json:"top_logprobs"`
+	Content []ChatCompletionLogprob `json:"content"`
+}
+
+type ChatCompletionLogprob struct {
+	Token       string          `json:"token"`
+	Logprob     float64         `json:"logprob"`
+	Bytes       []byte          `json:"bytes"`
+	TopLogprobs json.RawMessage `json:"top_logprobs"`
 }
 
 type Role string
@@ -35,9 +38,23 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
+type Function struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type ToolCall struct {
+	Id       string   `json:"id"`
+	Type     string   `json:"type"`
+	Function Function `json:"function"`
+}
+
+type ToolCalls []ToolCall
+
 type ChatCompletionMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	ToolCalls ToolCalls `json:"tool_calls"`
 }
 
 type ChatCompletionCompletion struct {
