@@ -17,6 +17,7 @@ services:
     image: breathbath/chatgpt:${APP_VERSION}
     depends_on:
       - redis
+      - mysql
     restart: always
     entrypoint: /app/chatgpt telegram
     volumes:
