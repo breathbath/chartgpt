@@ -30,5 +30,4 @@ USER app:app
 
 COPY --from=build-env /build/chatgpt/chatgpt /app/
 COPY .env.default /app/.env.default
-COPY source.ogg /app/source.ogg
 CMD /app/chatgpt telegram
