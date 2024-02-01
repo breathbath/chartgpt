@@ -13,11 +13,13 @@ import (
 type RawConfig struct {
 	SessionDuration string `envconfig:"AUTH_SESSION_DURATION"`
 	Users           string `envconfig:"AUTH_USERS"`
+	AuthIsDisabled  bool   `envconfig:"AUTH_DISABLED"`
 }
 
 type Config struct {
 	SessionDuration time.Duration
 	Users           []ConfiguredUser
+	AuthIsDisabled  bool
 }
 
 func (c *Config) Validate() *errs.Multi {
@@ -56,6 +58,8 @@ func (rc *RawConfig) ToConfig() (*Config, *errs.Multi) {
 			cfg.Users = usersFromConfig
 		}
 	}
+
+	cfg.AuthIsDisabled = rc.AuthIsDisabled
 
 	return cfg, multiErr
 }

@@ -79,6 +79,10 @@ func (lh *LoginHandler) checkPassword(candidatePassword string, user *CachedUser
 }
 
 func (lh *LoginHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
+	if lh.cfg.AuthIsDisabled {
+		return false, nil
+	}
+
 	user := GetUserFromReq(req)
 
 	if user != nil && user.State == UserVerified && (user.LoginTill == int64(0) || user.LoginTill > time.Now().Unix()) {

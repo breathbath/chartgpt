@@ -155,26 +155,26 @@ func (b *Bot) processResponseMessage(
 	log.Debugf("telegram sender options: %+v", senderOpts)
 	log.Debugf("telegram message:\n%q", resp.Message)
 
-	replyButtonsGroups := [][]telebot.InlineButton{}
+	replyButtonsGroups := [][]telebot.ReplyButton{}
 	for i, predefinedResp := range resp.Options.GetPredefinedResponses() {
 		if predefinedResp == "" {
 			continue
 		}
 		if i%3 == 0 {
-			replyButtonsGroups = append(replyButtonsGroups, []telebot.InlineButton{})
+			replyButtonsGroups = append(replyButtonsGroups, []telebot.ReplyButton{})
 		}
 
 		lastGroupIndex := len(replyButtonsGroups) - 1
 		replyButtonsGroups[lastGroupIndex] = append(
 			replyButtonsGroups[lastGroupIndex],
-			telebot.InlineButton{Text: fmt.Sprint(i), InlineQuery: string(predefinedResp)},
+			telebot.ReplyButton{Text: string(predefinedResp)},
 		)
 	}
 
 	if len(replyButtonsGroups) > 0 {
 		rm := &telebot.ReplyMarkup{
 			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
-			InlineKeyboard:  replyButtonsGroups,
+			ReplyKeyboard:   replyButtonsGroups,
 			ResizeKeyboard:  true,
 		}
 		senderOpts.ReplyMarkup = rm
