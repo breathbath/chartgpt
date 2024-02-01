@@ -285,14 +285,21 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}
 
 	messages := make([]string, 0, len(chatResp.Choices))
+	var media *msg.Media
 	for i := range chatResp.Choices {
 		choice := chatResp.Choices[i]
 		if choice.FinishReason == "tool_calls" {
-			responseTxt, err := h.processToolCall(ctx, choice, &conversation.Messages, req, model)
+			response, err := h.processToolCall(ctx, choice, &conversation.Messages, req, model)
 			if err != nil {
 				return nil, err
 			}
-			messages = append(messages, responseTxt)
+
+			if response.Message != "" {
+				messages = append(messages, response.Message)
+			}
+			if response.Media != nil {
+				media = response.Media
+			}
 		} else {
 			if choice.Message.Content == "" {
 				continue
@@ -321,6 +328,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	return &msg.Response{
 		Message: strings.Join(messages, "/n"),
 		Type:    msg.Success,
+		Media:   media,
 	}, nil
 }
 
@@ -330,7 +338,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	history *[]ConversationMessage,
 	req *msg.Request,
 	model *ConfiguredModel,
-) (responseMessage string, err error) {
+) (responseMessage *msg.Response, err error) {
 	log := logging.WithContext(ctx)
 
 	if len(choice.Message.ToolCalls) == 0 {
@@ -359,7 +367,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	history *[]ConversationMessage,
 	req *msg.Request,
 	model *ConfiguredModel,
-) (responseMessage string, err error) {
+) (responseMessage *msg.Response, err error) {
 	var data string
 	err = json.Unmarshal(arguments, &data)
 	if err != nil {
@@ -389,7 +397,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	if argumentsMap["страна"] != nil {
 		country = fmt.Sprint(argumentsMap["страна"])
 	}
-	found, w, err := h.findByCriteria(
+	found, wineFromDb, err := h.findByCriteria(
 		color,
 		sugar,
 		country,
@@ -405,10 +413,10 @@ func (h *ChatCompletionHandler) callFindWine(
 			Text:      "Ничего не найдено",
 			CreatedAt: time.Now().Unix(),
 		})
-		return NotFoundMessage, nil
+		return &msg.Response{Message: NotFoundMessage}, nil
 	}
 
-	text, err := h.generateWineAnswer(ctx, req, w, model)
+	text, err := h.generateWineAnswer(ctx, req, wineFromDb, model)
 	if err != nil {
 		return responseMessage, err
 	}
@@ -419,7 +427,19 @@ func (h *ChatCompletionHandler) callFindWine(
 		CreatedAt: time.Now().Unix(),
 	})
 
-	return text, nil
+	respMessage := &msg.Response{
+		Message: text,
+	}
+	if wineFromDb.Photo != "" {
+		respMessage.Media = &msg.Media{
+			Path:            wineFromDb.Photo,
+			Type:            msg.MediaTypeImage,
+			PathType:        msg.MediaPathTypeUrl,
+			IsBeforeMessage: true,
+		}
+	}
+
+	return respMessage, nil
 }
 
 func (h *ChatCompletionHandler) generateWineAnswer(

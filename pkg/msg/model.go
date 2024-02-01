@@ -64,4 +64,16 @@ type Response struct {
 	Message string
 	Type    Type
 	Options *Options
+	Media   *Media
+}
+
+const MediaTypeImage = "image"
+const MediaPathTypeUrl = "url"
+const MediaPathTypeFile = "file"
+
+type Media struct {
+	Path            string
+	Type            string
+	PathType        string
+	IsBeforeMessage bool
 }

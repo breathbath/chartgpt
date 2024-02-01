@@ -118,9 +118,25 @@ func (b *Bot) sendMessageSuccess(
 ) error {
 	log := logging.WithContext(ctx)
 
-	_, err := b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
-	if err != nil {
-		return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
+	if resp.Media != nil && resp.Media.IsBeforeMessage {
+		err := b.sendMedia(ctx, telegramMsg, resp, senderOpts)
+		if err != nil {
+			return errors.Wrapf(err, "failed to send media:\n%+v", resp.Media)
+		}
+	}
+
+	if resp.Message != "" {
+		_, err := b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
+		if err != nil {
+			return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
+		}
+	}
+
+	if resp.Media != nil && !resp.Media.IsBeforeMessage {
+		err := b.sendMedia(ctx, telegramMsg, resp, senderOpts)
+		if err != nil {
+			return errors.Wrapf(err, "failed to send media:\n%+v", resp.Media)
+		}
 	}
 
 	if resp.Options.IsResponseToHiddenMessage() {
@@ -136,6 +152,54 @@ func (b *Bot) sendMessageSuccess(
 	return nil
 }
 
+func (b *Bot) sendMedia(
+	ctx context.Context,
+	telegramMsg telebot.Context,
+	resp *msg.Response,
+	senderOpts *telebot.SendOptions,
+) error {
+	log := logging.WithContext(ctx)
+	if resp.Media == nil {
+		return nil
+	}
+
+	var mediaFile *telebot.File
+	if resp.Media.Path != "" {
+		if resp.Media.PathType == msg.MediaPathTypeFile {
+			f := telebot.FromDisk(resp.Media.Path)
+			mediaFile = &f
+		} else if resp.Media.PathType == msg.MediaPathTypeUrl {
+			f := telebot.FromURL(resp.Media.Path)
+			mediaFile = &f
+		} else {
+			log.Infof("Unknown media path type %q", resp.Media.PathType)
+		}
+	}
+
+	var sendable telebot.Sendable
+	if mediaFile != nil {
+		if resp.Media.Type == msg.MediaTypeImage {
+			sendable = &telebot.Photo{File: *mediaFile}
+		} else {
+			log.Infof("Unknown media type %q", resp.Media.Type)
+		}
+	}
+
+	if sendable == nil {
+		log.Info("Nothing to send from media")
+		return nil
+	}
+
+	_, err := b.baseBot.Send(telegramMsg.Sender(), sendable, senderOpts)
+	if err != nil {
+		return errors.Wrap(err, "failed to send media")
+	}
+
+	log.Infof("Successfully sent media %+v", resp.Media)
+
+	return nil
+}
+
 func (b *Bot) processResponseMessage(
 	ctx context.Context,
 	telegramMsg telebot.Context,
@@ -143,7 +207,7 @@ func (b *Bot) processResponseMessage(
 ) error {
 	log := logging.WithContext(ctx)
 
-	if resp == nil || resp.Message == "" {
+	if resp == nil || (resp.Message == "" && resp.Media == nil) {
 		log.Info("response message is empty, will send nothing to the sender")
 		return nil
 	}
@@ -154,6 +218,7 @@ func (b *Bot) processResponseMessage(
 
 	log.Debugf("telegram sender options: %+v", senderOpts)
 	log.Debugf("telegram message:\n%q", resp.Message)
+	log.Debugf("telegram media:\n%+v", resp.Media)
 
 	replyButtonsGroups := [][]telebot.ReplyButton{}
 	for i, predefinedResp := range resp.Options.GetPredefinedResponses() {
