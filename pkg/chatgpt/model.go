@@ -149,3 +149,7 @@ func (c Conversation) ToRaw() []map[string]interface{} {
 
 	return convResp
 }
+
+type AudioToTextResponse struct {
+	Text string `json:"text"`
+}

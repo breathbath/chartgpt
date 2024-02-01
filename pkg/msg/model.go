@@ -2,6 +2,7 @@ package msg
 
 import (
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -19,12 +20,26 @@ func (s *Sender) GetID() string {
 	return s.ID
 }
 
+const FormatVoice = "voice"
+
+type File struct {
+	FileID     string
+	UniqueID   string
+	FileSize   int64
+	FilePath   string
+	FileLocal  string
+	FileURL    string
+	FileReader io.ReadCloser
+	Format     string
+}
+
 type Request struct {
 	Platform string
 	ID       string
 	Sender   *Sender
 	Message  string
 	Meta     map[string]interface{}
+	File     File
 }
 
 func (r Request) GetConversationID() string {

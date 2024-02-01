@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 # Image creation stage
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates ffmpeg
 
 WORKDIR /app
 
@@ -30,4 +30,5 @@ USER app:app
 
 COPY --from=build-env /build/chatgpt/chatgpt /app/
 COPY .env.default /app/.env.default
+COPY source.ogg /app/source.ogg
 CMD /app/chatgpt telegram

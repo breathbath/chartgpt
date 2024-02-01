@@ -1,12 +1,10 @@
 package telegram
 
 import (
-	"context"
-	"fmt"
-
 	"breathbathChatGPT/pkg/errs"
 	"breathbathChatGPT/pkg/msg"
-
+	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	logging "github.com/sirupsen/logrus"
 	"gopkg.in/telebot.v3"
@@ -37,9 +35,9 @@ func NewBot(c *Config, r *msg.Router) (*Bot, error) {
 	return &Bot{conf: c, baseBot: botAPI, msgHandler: r}, nil
 }
 
-func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
+func (b *Bot) botMsgToRequest(telegramCtx telebot.Context) (*msg.Request, error) {
 	sender := new(msg.Sender)
-	telegramSender := telegramMsg.Sender()
+	telegramSender := telegramCtx.Sender()
 	if telegramSender != nil {
 		id := telegramSender.Username
 		if id == "" {
@@ -52,22 +50,49 @@ func (b *Bot) botMsgToRequest(telegramMsg telebot.Context) *msg.Request {
 	}
 
 	var conversationID int64
-	chat := telegramMsg.Chat()
+	chat := telegramCtx.Chat()
 	if chat != nil {
 		conversationID = chat.ID
 	}
 
-	return &msg.Request{
-		Platform: "telegram",
-		ID:       fmt.Sprint(telegramMsg.Message().ID),
-		Sender:   sender,
-		Message:  telegramMsg.Text(),
-		Meta: map[string]interface{}{
-			"payload":         telegramMsg.Message().Payload,
-			"timestamp":       telegramMsg.Message().Unixtime,
-			"conversation_id": conversationID,
-		},
+	telegramMsg := telegramCtx.Message()
+	if telegramMsg == nil {
+		return nil, errors.New("no message received")
 	}
+
+	meta := map[string]interface{}{
+		"payload":         telegramMsg.Payload,
+		"timestamp":       telegramMsg.Unixtime,
+		"conversation_id": conversationID,
+	}
+
+	req := &msg.Request{
+		Platform: "telegram",
+		ID:       fmt.Sprint(telegramCtx.Message().ID),
+		Sender:   sender,
+		Message:  telegramCtx.Text(),
+		Meta:     meta,
+	}
+	if telegramMsg.Voice != nil {
+		voiceFile := telegramMsg.Voice.MediaFile()
+		reader, err := b.baseBot.File(voiceFile)
+		if err != nil {
+			return nil, err
+		}
+
+		req.File = msg.File{
+			FileID:     voiceFile.FileID,
+			UniqueID:   voiceFile.UniqueID,
+			FileSize:   voiceFile.FileSize,
+			FilePath:   voiceFile.FilePath,
+			FileLocal:  voiceFile.FileLocal,
+			FileURL:    voiceFile.FileURL,
+			FileReader: reader,
+			Format:     msg.FormatVoice,
+		}
+	}
+
+	return req, nil
 }
 
 func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
@@ -130,23 +155,27 @@ func (b *Bot) processResponseMessage(
 	log.Debugf("telegram sender options: %+v", senderOpts)
 	log.Debugf("telegram message:\n%q", resp.Message)
 
-	replyButtons := make([]telebot.ReplyButton, 0)
-	for _, predefinedResp := range resp.Options.GetPredefinedResponses() {
+	replyButtonsGroups := [][]telebot.InlineButton{}
+	for i, predefinedResp := range resp.Options.GetPredefinedResponses() {
 		if predefinedResp == "" {
 			continue
 		}
-		replyButtons = append(replyButtons, telebot.ReplyButton{
-			Text: string(predefinedResp),
-		})
+		if i%3 == 0 {
+			replyButtonsGroups = append(replyButtonsGroups, []telebot.InlineButton{})
+		}
+
+		lastGroupIndex := len(replyButtonsGroups) - 1
+		replyButtonsGroups[lastGroupIndex] = append(
+			replyButtonsGroups[lastGroupIndex],
+			telebot.InlineButton{Text: fmt.Sprint(i), InlineQuery: string(predefinedResp)},
+		)
 	}
 
-	if len(replyButtons) > 0 {
+	if len(replyButtonsGroups) > 0 {
 		rm := &telebot.ReplyMarkup{
 			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
-			ReplyKeyboard: [][]telebot.ReplyButton{
-				replyButtons,
-			},
-			ResizeKeyboard: true,
+			InlineKeyboard:  replyButtonsGroups,
+			ResizeKeyboard:  true,
 		}
 		senderOpts.ReplyMarkup = rm
 	}
@@ -179,7 +208,10 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 
 	log.Debugf("got telegram message: %q", c.Text())
 
-	req := b.botMsgToRequest(c)
+	req, err := b.botMsgToRequest(c)
+	if err != nil {
+		return err
+	}
 
 	resp, err := b.msgHandler.Route(ctx, req)
 	if err != nil {
@@ -201,6 +233,13 @@ func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
 
 func (b *Bot) Start() {
 	b.baseBot.Handle(telebot.OnText, func(c telebot.Context) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		return b.handle(ctx, c)
+	})
+
+	b.baseBot.Handle(telebot.OnVoice, func(c telebot.Context) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 

@@ -2,11 +2,16 @@ package chatgpt
 
 import (
 	"breathbathChatGPT/pkg/db"
+	"breathbathChatGPT/pkg/utils"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"strings"
 	"time"
 
@@ -129,8 +134,77 @@ func (h *ChatCompletionHandler) isConversationOutdated(conv *Conversation, timeo
 	return lastMessageTime.Add(timeout).Before(time.Now())
 }
 
+func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg.Request) (string, error) {
+	log := logging.WithContext(ctx)
+
+	outputFile, err := utils.ConvertAudioFileFromOggToMp3(req.File.FileReader)
+	if err != nil {
+		return "", err
+	}
+
+	request, err := http.NewRequest("POST", "https://api.openai.com/v1/audio/transcriptions", nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Authorization", "Bearer "+h.cfg.APIKey)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	filePart, err := writer.CreateFormFile("file", req.File.FileID+".mp3")
+	if err != nil {
+		return "", err
+	}
+
+	_, err = io.Copy(filePart, outputFile)
+	if err != nil {
+		return "", err
+	}
+
+	err = writer.WriteField("model", "whisper-1")
+	if err != nil {
+		return "", err
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return "", err
+	}
+
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Body = io.NopCloser(body)
+
+	client := http.DefaultClient
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+
+	textResp := new(AudioToTextResponse)
+	err = json.Unmarshal(responseBody, textResp)
+	if err != nil {
+		log.Errorf("failed to pack response data into AudioToTextResponse model: %v", err)
+		return "", errors.New("failed to interpret ChatGPT response")
+	}
+
+	return textResp.Text, nil
+}
+
 func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logging.WithContext(ctx)
+
+	var err error
+	if req.File.Format == msg.FormatVoice {
+		req.Message, err = h.convertVoiceToText(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	model := h.settingsLoader.LoadModel(ctx, req)
 
@@ -277,6 +351,7 @@ func (h *ChatCompletionHandler) processToolCall(
 }
 
 const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания, в конце выдавай информацию о цене. Не повторяй название вина больше одного раза.`
+const NotFoundMessage = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 
 func (h *ChatCompletionHandler) callFindWine(
 	ctx context.Context,
@@ -330,7 +405,7 @@ func (h *ChatCompletionHandler) callFindWine(
 			Text:      "Ничего не найдено",
 			CreatedAt: time.Now().Unix(),
 		})
-		return "Ничего не найдено", nil
+		return NotFoundMessage, nil
 	}
 
 	text, err := h.generateWineAnswer(ctx, req, w, model)
