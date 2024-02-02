@@ -579,7 +579,8 @@ type Wine struct {
 	FoodDescription  string  `db:"food_description"`
 	Style            string  `db:"style"`
 	Recommend        string  `db:"recommend"`
-	Id               int     `db:"int"`
+	Type             string  `db:"type"`
+	Id               int     `db:"id"`
 }
 
 func (w Wine) String() string {
