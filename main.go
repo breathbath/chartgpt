@@ -1,16 +1,15 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
-
 	"breathbathChatGPT/pkg/cmd"
 	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/logging"
 	"breathbathChatGPT/pkg/utils"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	logrus.SetLevel(logrus.DebugLevel)
+	logging.Init()
 
 	cfgFiles := []string{".env.default", ".env.secret", ".env.local"}
 	existingFiles := make([]string, 0, len(cfgFiles))

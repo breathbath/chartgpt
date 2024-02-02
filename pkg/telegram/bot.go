@@ -2,11 +2,12 @@ package telegram
 
 import (
 	"breathbathChatGPT/pkg/errs"
+	"breathbathChatGPT/pkg/logging"
 	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
-	logging "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/telebot.v3"
 )
 
@@ -116,7 +117,7 @@ func (b *Bot) sendMessageSuccess(
 	resp *msg.Response,
 	senderOpts *telebot.SendOptions,
 ) error {
-	log := logging.WithContext(ctx)
+	log := logrus.WithContext(ctx)
 
 	if resp.Media != nil && resp.Media.IsBeforeMessage {
 		err := b.sendMedia(ctx, telegramMsg, resp, senderOpts)
@@ -158,7 +159,7 @@ func (b *Bot) sendMedia(
 	resp *msg.Response,
 	senderOpts *telebot.SendOptions,
 ) error {
-	log := logging.WithContext(ctx)
+	log := logrus.WithContext(ctx)
 	if resp.Media == nil {
 		return nil
 	}
@@ -205,7 +206,7 @@ func (b *Bot) processResponseMessage(
 	telegramMsg telebot.Context,
 	resp *msg.Response,
 ) error {
-	log := logging.WithContext(ctx)
+	log := logrus.WithContext(ctx)
 
 	if resp == nil || (resp.Message == "" && resp.Media == nil) {
 		log.Info("response message is empty, will send nothing to the sender")
@@ -269,7 +270,7 @@ func (b *Bot) processResponseMessage(
 }
 
 func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
-	log := logging.WithContext(ctx)
+	log := logrus.WithContext(ctx)
 
 	log.Debugf("got telegram message: %q", c.Text())
 
@@ -301,7 +302,7 @@ func (b *Bot) Start() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		return b.handle(ctx, c)
+		return b.handle(logging.WithTrackingId(ctx), c)
 	})
 
 	b.baseBot.Handle(telebot.OnVoice, func(c telebot.Context) error {
@@ -317,14 +318,14 @@ func (b *Bot) Start() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		return b.handle(ctx, c)
+		return b.handle(logging.WithTrackingId(ctx), c)
 	})
 
 	b.baseBot.Start()
 }
 
 func (b *Bot) Stop() {
-	logging.Info("will stop telegram bot")
+	logrus.Info("will stop telegram bot")
 	b.baseBot.Stop()
-	logging.Info("stopped telegram bot")
+	logrus.Info("stopped telegram bot")
 }

@@ -200,6 +200,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 
 	var err error
 	if req.File.Format == msg.FormatVoice {
+		log.Infof("Got Voice input")
 		req.Message, err = h.convertVoiceToText(ctx, req)
 		if err != nil {
 			return nil, err
