@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: 'Usage Statistics'
+    updateIntervalSeconds: 100000
+    allowUiUpdates: true
+    options:
+      path: /usr/lib/dashboards
+      foldersFromFilesStructure: true

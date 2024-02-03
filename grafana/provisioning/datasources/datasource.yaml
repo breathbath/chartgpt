@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: MySQL
+    type: mysql
+    url: mysql:3306
+    user: root
+    uid: "d3a102d9-4572-492f-a3f2-d6de0940187c"
+    jsonData:
+      database: wine
+      maxOpenConns: 100 # Grafana v5.4+
+      maxIdleConns: 100 # Grafana v5.4+
+      maxIdleConnsAuto: true # Grafana v9.5.1+
+      connMaxLifetime: 14400 # Grafana v5.4+
+    secureJsonData:
+      password: root

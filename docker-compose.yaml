@@ -31,5 +31,20 @@ services:
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
     entrypoint: redis-server --appendonly yes
     restart: always
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=administr
+      - GF_SECURITY_ADMIN_PASSWORD=dfasjdflakjf34123434
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    ports:
+      - '3001:3000'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - './grafana/grafana.ini:/etc/grafana/grafana.ini'
+      - './grafana/dashboard.json:/usr/lib/dashboards/dashboard.json'
+      -  grafana-storage:/var/lib/grafana
 volumes:
   mysql8-data:
+  grafana-storage:
