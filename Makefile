@@ -18,7 +18,7 @@ deploy:
 	git pull
 	APP_VERSION=$(image_tag) docker compose stop chatgpt
 	APP_VERSION=$(image_tag) docker compose pull
-	APP_VERSION=$(image_tag) docker compose up -d chatgpt --remove-orphans
+	APP_VERSION=$(image_tag) docker compose up -d chatgpt grafana --remove-orphans
 
 .PHONY: tag
 tag:
