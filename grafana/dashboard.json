@@ -109,7 +109,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(created_at,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(created_at)\nGROUP BY\n  time",
+          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time",
           "refId": "A",
           "sql": {
             "columns": [
@@ -223,7 +223,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  COUNT(*) AS \"count\",\n  $__timeGroup(created_at,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(created_at)\nGROUP BY\n  time\nLIMIT\n  50",
+          "rawSql": "SELECT\n  COUNT(*) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time\nLIMIT\n  50",
           "refId": "A",
           "sql": {
             "columns": [
@@ -250,7 +250,7 @@
               {
                 "parameters": [
                   {
-                    "name": "created_at",
+                    "name": "session_start",
                     "type": "functionParameter"
                   }
                 ],
@@ -273,6 +273,94 @@
       ],
       "title": "Total requests count",
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "mysql",
+        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "dataset": "wine",
+          "datasource": {
+            "type": "mysql",
+            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  user_id 'user id',\n  (input_prompt_tokens + input_completion_tokens + gen_completion_tokens + gen_prompt_tokens) 'toal tokens',\n  is_voice_input 'is voice',\n  input 'prompt',\n  input_prompt_tokens 'prompt tokens',\n  input_completion_tokens 'compl tokens',\n  gen_completion_tokens 'reco completion tokens',\n  gen_prompt_tokens 'reco prompt tokens',\n    session_start as 'started',\n    session_end as 'end',\n  gpt_model 'model'\nFROM\n  wine.usage_stats\nWHERE \n  $__timeFilter(session_start)\nLIMIT\n  50",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          },
+          "table": "usage_stats"
+        }
+      ],
+      "title": "Raw Data",
+      "transformations": [],
+      "type": "table"
     }
   ],
   "refresh": "",
