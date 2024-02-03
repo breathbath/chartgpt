@@ -1,17 +1,18 @@
 package chatgpt
 
 import (
-	"breathbathChatGPT/pkg/db"
+	"breathbathChatGPT/pkg/monitoring"
+	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/utils"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
@@ -27,9 +28,11 @@ import (
 const (
 	URL                           = "https://api.openai.com"
 	CompletionsURL                = URL + "/v1/chat/completions"
+	TranscriptionsURL             = URL + "/v1/audio/transcriptions"
 	ModelsURL                     = URL + "/v1/models"
 	ConversationTimeout           = time.Minute * 10
 	MaxScopedConversationMessages = 20
+	VoiceToTextModel              = "whisper-1"
 )
 
 type ChatCompletionHandler struct {
@@ -37,6 +40,7 @@ type ChatCompletionHandler struct {
 	settingsLoader *Loader
 	db             storage.Client
 	isScopedMode   func() bool
+	wineProvider   *recommend.WineProvider
 }
 
 func NewChatCompletionHandler(
@@ -44,6 +48,7 @@ func NewChatCompletionHandler(
 	db storage.Client,
 	loader *Loader,
 	isScopedMode func() bool,
+	wineProvider *recommend.WineProvider,
 ) (h *ChatCompletionHandler, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
@@ -55,6 +60,7 @@ func NewChatCompletionHandler(
 		db:             db,
 		settingsLoader: loader,
 		isScopedMode:   isScopedMode,
+		wineProvider:   wineProvider,
 	}, nil
 }
 
@@ -135,14 +141,17 @@ func (h *ChatCompletionHandler) isConversationOutdated(conv *Conversation, timeo
 }
 
 func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg.Request) (string, error) {
+	monitoring.Usage(ctx).SetIsVoiceInput(true)
+
 	log := logging.WithContext(ctx)
 
 	outputFile, err := utils.ConvertAudioFileFromOggToMp3(req.File.FileReader)
 	if err != nil {
 		return "", err
 	}
+	log.Debugf("Converted file to mp3 format: %q", req.File)
 
-	request, err := http.NewRequest("POST", "https://api.openai.com/v1/audio/transcriptions", nil)
+	request, err := http.NewRequest("POST", TranscriptionsURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -160,10 +169,11 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 		return "", err
 	}
 
-	err = writer.WriteField("model", "whisper-1")
+	err = writer.WriteField("model", VoiceToTextModel)
 	if err != nil {
 		return "", err
 	}
+	monitoring.Usage(ctx).SetVoiceToTextModel(VoiceToTextModel)
 
 	err = writer.Close()
 	if err != nil {
@@ -173,6 +183,8 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	request.Body = io.NopCloser(body)
 
+	log.Debugf("will do chatgpt request, url: %q, method: %s", request.URL.String(), request.Method)
+
 	client := http.DefaultClient
 	response, err := client.Do(request)
 	if err != nil {
@@ -180,9 +192,21 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 	}
 	defer response.Body.Close()
 
+	dump, err := httputil.DumpResponse(response, true)
+	if err != nil {
+		log.Warnf("failed to dump response: %v", err)
+	} else {
+		log.Infof("response: %q", string(dump))
+	}
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", errors.New("bad response code from ChatGPT")
+	}
+
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return "", err
+		log.Errorf("failed to read response body: %v", err)
+		return "", errors.New("failed to read ChatGPT response")
 	}
 
 	textResp := new(AudioToTextResponse)
@@ -205,6 +229,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		if err != nil {
 			return nil, err
 		}
+		log.Debugf("Converted voice to text: %q", req.Message)
 	}
 
 	model := h.settingsLoader.LoadModel(ctx, req)
@@ -218,6 +243,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		Text:      req.Message,
 		CreatedAt: time.Now().Unix(),
 	})
+
+	monitoring.Usage(ctx).SetInput(req.Message)
 
 	requestData := map[string]interface{}{
 		"model":    model.GetName(),
@@ -284,6 +311,10 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	if err != nil {
 		return nil, err
 	}
+
+	monitoring.Usage(ctx).SetInputPromptTokens(chatResp.Usage.PromptTokens)
+	monitoring.Usage(ctx).SetInputCompletionTokens(chatResp.Usage.CompletionTokens)
+	monitoring.Usage(ctx).SetGPTModel(model.GetName())
 
 	messages := make([]string, 0, len(chatResp.Choices))
 	var media *msg.Media
@@ -369,6 +400,8 @@ func (h *ChatCompletionHandler) callFindWine(
 	req *msg.Request,
 	model *ConfiguredModel,
 ) (responseMessage *msg.Response, err error) {
+	log := logging.WithContext(ctx)
+
 	var data string
 	err = json.Unmarshal(arguments, &data)
 	if err != nil {
@@ -382,28 +415,23 @@ func (h *ChatCompletionHandler) callFindWine(
 		return responseMessage, err
 	}
 
+	wineFilter := recommend.WineFilter{}
+
 	logging.Debugf("Function call: %q", string(arguments))
 
-	color := ""
 	if argumentsMap["цвет"] != nil {
-		color = fmt.Sprint(argumentsMap["цвет"])
+		wineFilter.Color = fmt.Sprint(argumentsMap["цвет"])
 	}
 
-	sugar := ""
 	if argumentsMap["сахар"] != nil {
-		sugar = fmt.Sprint(argumentsMap["сахар"])
+		wineFilter.Sugar = fmt.Sprint(argumentsMap["сахар"])
 	}
 
-	country := ""
 	if argumentsMap["страна"] != nil {
-		country = fmt.Sprint(argumentsMap["страна"])
+		wineFilter.Country = fmt.Sprint(argumentsMap["страна"])
 	}
-	found, wineFromDb, err := h.findByCriteria(
-		color,
-		sugar,
-		country,
-	)
 
+	found, wineFromDb, err := h.wineProvider.FindByCriteria(wineFilter)
 	if err != nil {
 		return responseMessage, err
 	}
@@ -416,6 +444,8 @@ func (h *ChatCompletionHandler) callFindWine(
 		})
 		return &msg.Response{Message: NotFoundMessage}, nil
 	}
+
+	log.Debugf("Found wine: %q", wineFromDb.String())
 
 	text, err := h.generateWineAnswer(ctx, req, wineFromDb, model)
 	if err != nil {
@@ -446,7 +476,7 @@ func (h *ChatCompletionHandler) callFindWine(
 func (h *ChatCompletionHandler) generateWineAnswer(
 	ctx context.Context,
 	req *msg.Request,
-	w Wine,
+	w recommend.Wine,
 	model *ConfiguredModel,
 ) (string, error) {
 	conversationContext := &Context{
@@ -482,6 +512,9 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 		return "", err
 	}
 
+	monitoring.Usage(ctx).SetGenPromptTokens(chatResp.Usage.PromptTokens)
+	monitoring.Usage(ctx).SetGenCompletionTokens(chatResp.Usage.CompletionTokens)
+
 	respMessage := ""
 	for i := range chatResp.Choices {
 		choice := chatResp.Choices[i]
@@ -501,135 +534,4 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 
 func (h *ChatCompletionHandler) CanHandle(context.Context, *msg.Request) (bool, error) {
 	return true, nil
-}
-
-func (h *ChatCompletionHandler) findByCriteria(color string, sugar string, country string) (found bool, w Wine, err error) {
-	config, err := db.LoadConfig()
-	if err != nil {
-		return false, w, err
-	}
-
-	conn, err := sqlx.Open("mysql", config.ConnString)
-	if err != nil {
-		return false, w, err
-	}
-
-	defer conn.Close()
-
-	params := map[string]interface{}{}
-	filters := []string{}
-
-	if color != "" {
-		params["color"] = color
-		filters = append(filters, "color=:color")
-	}
-
-	if country != "" {
-		params["country"] = country
-		filters = append(filters, "country=:country")
-	}
-
-	if sugar != "" {
-		params["sugar"] = sugar
-		filters = append(filters, "sugar=:sugar")
-	}
-
-	where := ""
-	if len(filters) > 0 {
-		where = fmt.Sprintf("WHERE %s", strings.Join(filters, " AND "))
-	}
-
-	const query = "SELECT * FROM winechef_wines %s order by RAND() limit 1"
-	q := fmt.Sprintf(query, where)
-
-	results, err := conn.NamedQuery(q, params)
-	if err != nil {
-		return false, w, err
-	}
-
-	for results.Next() {
-		var w Wine
-		err = results.StructScan(&w)
-		if err != nil {
-			return false, w, err
-		}
-
-		return true, w, nil
-	}
-
-	return false, w, nil
-}
-
-type Wine struct {
-	Color            string  `db:"color"`
-	Sugar            string  `db:"sugar"`
-	Strength         string  `db:"strength"`
-	Photo            string  `db:"photo"`
-	Name             string  `db:"name"`
-	Article          string  `db:"article"`
-	RealName         string  `db:"real_name"`
-	Year             string  `db:"year"`
-	Country          string  `db:"country"`
-	Region           string  `db:"region"`
-	Manufacturer     string  `db:"manufacturer"`
-	Grape            string  `db:"grape"`
-	Price            float64 `db:"price"`
-	Body             string  `db:"body"`
-	SmellDescription string  `db:"smell_description"`
-	TasteDescription string  `db:"taste_description"`
-	FoodDescription  string  `db:"food_description"`
-	Style            string  `db:"style"`
-	Recommend        string  `db:"recommend"`
-	Type             string  `db:"type"`
-	Id               int     `db:"id"`
-}
-
-func (w Wine) String() string {
-	textParts := []string{}
-	if w.Color != "" {
-		textParts = append(textParts, fmt.Sprintf("Цвет вина: %s", w.Color))
-	}
-	if w.Sugar != "" {
-		textParts = append(textParts, fmt.Sprintf("Сахар: %s", w.Sugar))
-	}
-	if w.Strength != "" {
-		textParts = append(textParts, fmt.Sprintf("Крепость: %s", w.Strength))
-	}
-	if w.RealName != "" {
-		textParts = append(textParts, fmt.Sprintf("Название вина: %s", w.RealName))
-	} else if w.Name != "" {
-		textParts = append(textParts, fmt.Sprintf("Название вина: %s", w.Name))
-	}
-
-	if w.Year != "" {
-		textParts = append(textParts, fmt.Sprintf("Год: %s", w.Year))
-	}
-
-	if w.Country != "" {
-		textParts = append(textParts, fmt.Sprintf("Страна происхождения: %s", w.Country))
-	}
-
-	if w.Price > 0 {
-		textParts = append(textParts, fmt.Sprintf("Цена: %.0f руб.", w.Price))
-	}
-
-	if w.Body != "" {
-		textParts = append(textParts, fmt.Sprintf("Тело вина: %s", w.Body))
-	}
-
-	if w.SmellDescription != "" {
-		textParts = append(textParts, fmt.Sprintf("Аромат: %s", w.SmellDescription))
-	}
-
-	if w.TasteDescription != "" {
-		textParts = append(textParts, fmt.Sprintf("Вкус: %s", w.TasteDescription))
-	}
-
-	if w.FoodDescription != "" {
-		textParts = append(textParts, fmt.Sprintf("Сочетаемость с блюдами: %s", w.FoodDescription))
-	} else if w.Style != "" {
-		textParts = append(textParts, fmt.Sprintf("Сочетаемость с блюдами: %s", w.Style))
-	}
-
-	return strings.Join(textParts, ", ")
 }

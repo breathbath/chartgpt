@@ -33,6 +33,13 @@ type File struct {
 	Format     string
 }
 
+func (f File) String() string {
+	return fmt.Sprintf(
+		"ID: %s, Size: %d, Path: %s, Local: %s, URL: %s, Format: %s",
+		f.FileID, f.FileSize, f.FilePath, f.FileLocal, f.FileURL, f.Format,
+	)
+}
+
 type Request struct {
 	Platform string
 	ID       string

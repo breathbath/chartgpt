@@ -8,11 +8,11 @@ import (
 
 type loggingContextKey string
 
-const trackingIDKey loggingContextKey = "trackingID"
+const TrackingIDKey loggingContextKey = "trackingID"
 
 func WithTrackingId(ctx context.Context) context.Context {
 	trackingID := uuid.New().String()
-	ctxWithTrackingId := context.WithValue(ctx, trackingIDKey, trackingID)
+	ctxWithTrackingId := context.WithValue(ctx, TrackingIDKey, trackingID)
 	return ctxWithTrackingId
 }
 
@@ -25,7 +25,7 @@ func (f *trackingIDFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		return f.TextFormatter.Format(entry)
 	}
 
-	contextValueI := entry.Context.Value(trackingIDKey)
+	contextValueI := entry.Context.Value(TrackingIDKey)
 	if contextValueI == nil {
 		return f.TextFormatter.Format(entry)
 	}

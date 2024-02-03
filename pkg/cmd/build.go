@@ -5,12 +5,14 @@ import (
 	"breathbathChatGPT/pkg/chatgpt"
 	"breathbathChatGPT/pkg/help"
 	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
+	"gorm.io/gorm"
 )
 
-func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
-	us := auth.NewUserStorage(db)
+func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Router, error) {
+	us := auth.NewUserStorage(cacheClient)
 
 	userMiddleware := auth.NewUserMiddleware(us)
 
@@ -37,21 +39,29 @@ func BuildMessageRouter(db storage.Client) (*msg.Router, error) {
 		return usr != nil && usr.Role == auth.AdminRole
 	}
 
-	setConversationCtxHandler := chatgpt.NewSetConversationContextCommand(db, isScopedModeFunc, isAdminDetector)
-	resetConversationHandler := chatgpt.NewResetConversationHandler(db, isScopedModeFunc, isAdminDetector)
+	setConversationCtxHandler := chatgpt.NewSetConversationContextCommand(cacheClient, isScopedModeFunc, isAdminDetector)
+	resetConversationHandler := chatgpt.NewResetConversationHandler(cacheClient, isScopedModeFunc, isAdminDetector)
 
 	validationErr := chartGptCfg.Validate()
 	if validationErr.HasErrors() {
 		return nil, validationErr
 	}
 
-	loader := chatgpt.NewSettingsLoader(db, chartGptCfg, isScopedModeFunc)
+	loader := chatgpt.NewSettingsLoader(cacheClient, chartGptCfg, isScopedModeFunc)
 
-	setModelHandler := chatgpt.NewSetModelHandler(chartGptCfg, db, loader, isScopedModeFunc, isAdminDetector)
+	setModelHandler := chatgpt.NewSetModelHandler(chartGptCfg, cacheClient, loader, isScopedModeFunc, isAdminDetector)
 
-	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, db, loader, isScopedModeFunc, isAdminDetector)
+	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, cacheClient, loader, isScopedModeFunc, isAdminDetector)
 
-	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(chartGptCfg, db, loader, isScopedModeFunc)
+	wineProvider := recommend.NewWineProvider(dbConn)
+
+	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(
+		chartGptCfg,
+		cacheClient,
+		loader,
+		isScopedModeFunc,
+		wineProvider,
+	)
 	if err != nil {
 		return nil, err
 	}

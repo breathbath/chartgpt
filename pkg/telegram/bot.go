@@ -3,21 +3,25 @@ package telegram
 import (
 	"breathbathChatGPT/pkg/errs"
 	"breathbathChatGPT/pkg/logging"
+	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/telebot.v3"
+	"gorm.io/gorm"
+	"time"
 )
 
 type Bot struct {
 	conf       *Config
 	baseBot    *telebot.Bot
 	msgHandler *msg.Router
+	dbConn     *gorm.DB
 }
 
-func NewBot(c *Config, r *msg.Router) (*Bot, error) {
+func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB) (*Bot, error) {
 	validationErr := c.Validate()
 	if validationErr.HasErrors() {
 		return nil, validationErr
@@ -33,10 +37,10 @@ func NewBot(c *Config, r *msg.Router) (*Bot, error) {
 		return nil, errors.Wrap(err, "failed to create telegram bot")
 	}
 
-	return &Bot{conf: c, baseBot: botAPI, msgHandler: r}, nil
+	return &Bot{conf: c, baseBot: botAPI, msgHandler: r, dbConn: dbConn}, nil
 }
 
-func (b *Bot) botMsgToRequest(telegramCtx telebot.Context) (*msg.Request, error) {
+func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) (*msg.Request, error) {
 	sender := new(msg.Sender)
 	telegramSender := telegramCtx.Sender()
 	if telegramSender != nil {
@@ -48,6 +52,15 @@ func (b *Bot) botMsgToRequest(telegramCtx telebot.Context) (*msg.Request, error)
 		sender.ID = id
 		sender.LastName = telegramSender.LastName
 		sender.FirstName = telegramSender.FirstName
+
+		monitoring.Usage(ctx).SetUserId(id)
+		if telegramSender.LastName != "" {
+			monitoring.Usage(ctx).SetLastName(telegramSender.LastName)
+		}
+
+		if telegramSender.FirstName != "" {
+			monitoring.Usage(ctx).SetFirstName(telegramSender.FirstName)
+		}
 	}
 
 	var conversationID int64
@@ -269,28 +282,37 @@ func (b *Bot) processResponseMessage(
 	return nil
 }
 
-func (b *Bot) handle(ctx context.Context, c telebot.Context) error {
+func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error {
 	log := logrus.WithContext(ctx)
 
-	log.Debugf("got telegram message: %q", c.Text())
+	log.Debugf("got telegram message: %q", telegramContext.Text())
 
-	req, err := b.botMsgToRequest(c)
+	monitoring.Usage(ctx).SetSessionStart(time.Now().UTC())
+	defer func() {
+		monitoring.Usage(ctx).SetSessionEnd(time.Now().UTC())
+		monitoring.Usage(ctx).Flush(ctx, b.dbConn)
+	}()
+
+	req, err := b.botMsgToRequest(ctx, telegramContext)
 	if err != nil {
+		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
 	resp, err := b.msgHandler.Route(ctx, req)
 	if err != nil {
-		_, sendErr := b.baseBot.Send(c.Sender(), "Unexpected error", &telebot.SendOptions{})
+		_, sendErr := b.baseBot.Send(telegramContext.Sender(), "Unexpected error", &telebot.SendOptions{})
 		if sendErr != nil {
 			log.Errorf("failed to send error message to the sender: %v", sendErr)
 		}
 
+		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
-	err = b.processResponseMessage(ctx, c, resp)
+	err = b.processResponseMessage(ctx, telegramContext, resp)
 	if err != nil {
+		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
@@ -302,14 +324,26 @@ func (b *Bot) Start() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		return b.handle(logging.WithTrackingId(ctx), c)
+		ctxT := logging.WithTrackingId(ctx)
+
+		err := b.handle(ctxT, c)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 
 	b.baseBot.Handle(telebot.OnVoice, func(c telebot.Context) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		return b.handle(ctx, c)
+		ctxT := logging.WithTrackingId(ctx)
+		err := b.handle(ctxT, c)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 
 	b.baseBot.Handle(&telebot.InlineButton{
@@ -318,7 +352,9 @@ func (b *Bot) Start() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		return b.handle(logging.WithTrackingId(ctx), c)
+		ctxT := logging.WithTrackingId(ctx)
+
+		return b.handle(ctxT, c)
 	})
 
 	b.baseBot.Start()

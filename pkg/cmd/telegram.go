@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"breathbathChatGPT/pkg/db"
+	"breathbathChatGPT/pkg/migrate"
+	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,17 +20,27 @@ var telegramCmd = &cobra.Command{
 	Use:   "telegram",
 	Short: "Starts a Telegram bot",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := storage.BuildRedisClient()
+		cacheClient, err := storage.BuildRedisClient()
 		if err != nil {
 			return err
 		}
 
-		msgRouter, err := BuildMessageRouter(db)
+		dbConn, err := db.NewConn()
 		if err != nil {
 			return err
 		}
 
-		bot, err := buildTelegram(msgRouter)
+		err = migrate.Execute(dbConn)
+		if err != nil {
+			return err
+		}
+
+		msgRouter, err := BuildMessageRouter(cacheClient, dbConn)
+		if err != nil {
+			return err
+		}
+
+		bot, err := buildTelegram(msgRouter, dbConn)
 		if err != nil {
 			return err
 		}
@@ -55,8 +68,8 @@ func waitForSignal(server *telegram.Bot) {
 	server.Stop()
 }
 
-func buildTelegram(r *msg.Router) (*telegram.Bot, error) {
-	telegramBot, err := telegram.BuildBot(r)
+func buildTelegram(r *msg.Router, dbConn *gorm.DB) (*telegram.Bot, error) {
+	telegramBot, err := telegram.BuildBot(r, dbConn)
 	if err != nil {
 		return nil, err
 	}
