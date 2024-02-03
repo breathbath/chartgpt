@@ -310,7 +310,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 11
       },
       "id": 2,
       "options": {
@@ -336,7 +336,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  user_id 'user id',\n  (input_prompt_tokens + input_completion_tokens + gen_completion_tokens + gen_prompt_tokens) 'toal tokens',\n  is_voice_input 'is voice',\n  input 'prompt',\n  input_prompt_tokens 'prompt tokens',\n  input_completion_tokens 'compl tokens',\n  gen_completion_tokens 'reco completion tokens',\n  gen_prompt_tokens 'reco prompt tokens',\n    session_start as 'started',\n    session_end as 'end',\n  gpt_model 'model'\nFROM\n  wine.usage_stats\nWHERE \n  $__timeFilter(session_start)\nLIMIT\n  50",
+          "rawSql": "SELECT\n  user_id 'user id',\n  (input_prompt_tokens + input_completion_tokens + gen_completion_tokens + gen_prompt_tokens) 'toal tokens',\n  is_voice_input 'is voice',\n  input 'prompt',\n  input_prompt_tokens 'prompt tokens',\n  input_completion_tokens 'compl tokens',\n  gen_completion_tokens 'reco completion tokens',\n  gen_prompt_tokens 'reco prompt tokens',\n    session_start as 'started',\n    session_end as 'end',\n  gpt_model 'model'\nFROM\n  wine.usage_stats\nWHERE \n  $__timeFilter(session_start)\nORDER BY session_start DESC\nLIMIT\n  50",
           "refId": "A",
           "sql": {
             "columns": [
@@ -377,6 +377,6 @@
   "timezone": "",
   "title": "Usage Statistics",
   "uid": "b245aa9a-dcf5-4d2c-bb75-634668c18551",
-  "version": 22,
+  "version": 2,
   "weekStart": ""
 }
