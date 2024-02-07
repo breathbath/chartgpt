@@ -54,6 +54,7 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 		sender.FirstName = telegramSender.FirstName
 
 		monitoring.Usage(ctx).SetUserId(id)
+		monitoring.TrackRecommend(ctx).SetUserID(id)
 		if telegramSender.LastName != "" {
 			monitoring.Usage(ctx).SetLastName(telegramSender.LastName)
 		}

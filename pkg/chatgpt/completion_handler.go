@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,22 +35,26 @@ const (
 	ConversationTimeout           = time.Minute * 10
 	MaxScopedConversationMessages = 20
 	VoiceToTextModel              = "whisper-1"
+	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. На другие темы отвечай что ты не знаешь что ответить. запрашивай информацию о цвете и сахаре. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб.
+`
 )
 
 type ChatCompletionHandler struct {
 	cfg            *Config
 	settingsLoader *Loader
-	db             storage.Client
+	cache          storage.Client
 	isScopedMode   func() bool
 	wineProvider   *recommend.WineProvider
+	dbConn         *gorm.DB
 }
 
 func NewChatCompletionHandler(
 	cfg *Config,
-	db storage.Client,
+	cache storage.Client,
 	loader *Loader,
 	isScopedMode func() bool,
 	wineProvider *recommend.WineProvider,
+	dbConn *gorm.DB,
 ) (h *ChatCompletionHandler, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
@@ -57,10 +63,11 @@ func NewChatCompletionHandler(
 
 	return &ChatCompletionHandler{
 		cfg:            cfg,
-		db:             db,
+		cache:          cache,
 		settingsLoader: loader,
 		isScopedMode:   isScopedMode,
 		wineProvider:   wineProvider,
+		dbConn:         dbConn,
 	}, nil
 }
 
@@ -74,7 +81,7 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 
 	cacheKey := getConversationKey(req)
 	conversation := new(Conversation)
-	found, err := h.db.Load(ctx, cacheKey, conversation)
+	found, err := h.cache.Load(ctx, cacheKey, conversation)
 	if err != nil {
 		return nil, err
 	}
@@ -99,13 +106,13 @@ func (h *ChatCompletionHandler) buildConversation(ctx context.Context, req *msg.
 }
 
 func (h *ChatCompletionHandler) buildConversationContext(ctx context.Context) (*Context, error) {
-	key := ""
 	if h.isScopedMode() {
-		key = getGlobalConversationContextKey()
+		return &Context{Message: SystemMessage}, nil
 	}
 
+	key := ""
 	conversationContext := new(Context)
-	found, err := h.db.Load(ctx, key, conversationContext)
+	found, err := h.cache.Load(ctx, key, conversationContext)
 	if err != nil {
 		return nil, err
 	}
@@ -245,58 +252,81 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	})
 
 	monitoring.Usage(ctx).SetInput(req.Message)
+	monitoring.TrackRecommend(ctx).SetUserPrompt(req.Message)
 
+	findWineFunction := map[string]interface{}{
+		"name":        "find_wine",
+		"description": "Find wine by provided parameters",
+		"parameters": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"цвет": map[string]interface{}{
+					"type": "string",
+					"enum": []string{"Белое", "Розовое", "Красное", "Оранжевое"},
+				},
+				"год": map[string]interface{}{
+					"type": "number",
+				},
+				"сахар": map[string]interface{}{
+					"type": "string",
+					"enum": []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"},
+				},
+				"крепость": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"type": "number",
+					},
+				},
+				"подходящие блюда": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"тело": map[string]interface{}{
+					"type": "string",
+					"enum": []string{"полнотелое"},
+				},
+				"название": map[string]interface{}{
+					"type": "string",
+				},
+				"страна": map[string]interface{}{
+					"type": "string",
+				},
+				"регион": map[string]interface{}{
+					"type": "string",
+				},
+				"виноград": map[string]interface{}{
+					"type": "string",
+				},
+				"тип": map[string]interface{}{
+					"type": "string",
+					"enum": []string{"вино", "игристое", "шампанское", "херес", "портвейн"},
+				},
+				"стиль": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"type": "string",
+						"enum": []string{"минеральные", "травянистые", "пряные", "пикантные", "ароматные", "фруктовые", "освежающие", "десертные", "выдержанные", "бархатистые"},
+					},
+				},
+				"цена": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"type": "number",
+					},
+				},
+			},
+			"required": []string{"цвет", "сахар", "цена"},
+		},
+	}
 	requestData := map[string]interface{}{
 		"model":    model.GetName(),
 		"messages": conversation.ToRaw(),
 		"tools": []map[string]interface{}{
 			{
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":        "find_wine",
-					"description": "Find wine by provided parameters",
-					"parameters": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"цвет": map[string]interface{}{
-								"type": "string",
-								"enum": []string{"Белое", "Розовое", "Красное", "Оранжевое"},
-							},
-							//"год": map[string]interface{}{
-							//	"type": "number",
-							//},
-							"сахар": map[string]interface{}{
-								"type": "string",
-								"enum": []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"},
-							},
-							//"крепость": map[string]interface{}{
-							//	"type": "string",
-							//	"enum": []string{"крепкое", "легкое", "среднекрепкое"},
-							//},
-							//"подходящие блюда": map[string]interface{}{
-							//	"type": "array",
-							//	"items": map[string]interface{}{
-							//		"type": "string",
-							//	},
-							//},
-							//"тело": map[string]interface{}{
-							//	"type": "string",
-							//	"enum": []string{"среднее", "легкое", "полнотелое"},
-							//},
-							//"название": map[string]interface{}{
-							//	"type": "string",
-							//},
-							"страна": map[string]interface{}{
-								"type": "string",
-							},
-							//"цена": map[string]interface{}{
-							//	"type": "string",
-							//	"enum": []string{"массовое", "бюджетное", "премиальное", "коллекционное"},
-							//},
-						},
-						"required": []string{"цвет", "сахар"},
-					},
-				},
+				"type":     "function",
+				"function": findWineFunction,
 			},
 		},
 	}
@@ -306,6 +336,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	reqsr.WithBearer(h.cfg.APIKey)
 	reqsr.WithPOST()
 	reqsr.WithInput(requestData)
+
+	monitoring.TrackRecommend(ctx).SetRawModelInput(requestData)
 
 	err = reqsr.Request(ctx)
 	if err != nil {
@@ -352,7 +384,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		}, nil
 	}
 
-	err = h.db.Save(ctx, getConversationKey(req), conversation, defaultConversationValidity)
+	err = h.cache.Save(ctx, getConversationKey(req), conversation, defaultConversationValidity)
 	if err != nil {
 		log.Error(err)
 	}
@@ -393,31 +425,25 @@ func (h *ChatCompletionHandler) processToolCall(
 const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания, в конце выдавай информацию о цене. Не повторяй название вина больше одного раза.`
 const NotFoundMessage = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 
-func (h *ChatCompletionHandler) callFindWine(
-	ctx context.Context,
-	arguments json.RawMessage,
-	history *[]ConversationMessage,
-	req *msg.Request,
-	model *ConfiguredModel,
-) (responseMessage *msg.Response, err error) {
-	log := logging.WithContext(ctx)
-
+func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
 	var data string
-	err = json.Unmarshal(arguments, &data)
+	err := json.Unmarshal(arguments, &data)
 	if err != nil {
-		return responseMessage, err
+		return nil, err
 	}
 
 	var argumentsMap map[string]interface{}
 
 	err = json.Unmarshal([]byte(data), &argumentsMap)
 	if err != nil {
-		return responseMessage, err
+		return nil, err
 	}
 
-	wineFilter := recommend.WineFilter{}
+	monitoring.TrackRecommend(ctx).SetFunctionCall(data)
 
-	logging.Debugf("Function call: %q", string(arguments))
+	wineFilter := &recommend.WineFilter{}
+
+	logging.Debugf("FunctionCall call: %q", string(arguments))
 
 	if argumentsMap["цвет"] != nil {
 		wineFilter.Color = fmt.Sprint(argumentsMap["цвет"])
@@ -431,7 +457,79 @@ func (h *ChatCompletionHandler) callFindWine(
 		wineFilter.Country = fmt.Sprint(argumentsMap["страна"])
 	}
 
-	found, wineFromDb, err := h.wineProvider.FindByCriteria(wineFilter)
+	if argumentsMap["регион"] != nil {
+		wineFilter.Region = fmt.Sprint(argumentsMap["регион"])
+	}
+
+	if argumentsMap["виноград"] != nil {
+		wineFilter.Grape = fmt.Sprint(argumentsMap["виноград"])
+	}
+
+	if argumentsMap["год"] != nil {
+		year, err := strconv.Atoi(fmt.Sprint(argumentsMap["год"]))
+		if err == nil {
+			wineFilter.Year = year
+		}
+	}
+
+	if argumentsMap["крепость"] != nil {
+		rawRange, ok := argumentsMap["крепость"].([]interface{})
+		if ok {
+			wineFilter.AlcoholPercentage = utils.ParseRangeFloat(rawRange)
+		}
+	}
+
+	if argumentsMap["подходящие блюда"] != nil {
+		rawList, ok := argumentsMap["подходящие блюда"].([]interface{})
+		if ok {
+			wineFilter.MatchingDishes = utils.ParseStrings(rawList)
+		}
+	}
+
+	if argumentsMap["тело"] != nil {
+		wineFilter.Body = fmt.Sprint(argumentsMap["тело"])
+	}
+
+	if argumentsMap["тип"] != nil {
+		wineFilter.Type = fmt.Sprint(argumentsMap["тип"])
+	}
+
+	if argumentsMap["название"] != nil {
+		wineFilter.Name = fmt.Sprint(argumentsMap["название"])
+	}
+
+	if argumentsMap["цена"] != nil {
+		rawRange, ok := argumentsMap["цена"].([]interface{})
+		if ok {
+			wineFilter.PriceRange = utils.ParseRangeFloat(rawRange)
+		}
+	}
+
+	if argumentsMap["стиль"] != nil {
+		rawList, ok := argumentsMap["стиль"].([]interface{})
+		if ok {
+			wineFilter.Style = utils.ParseStrings(rawList)
+		}
+	}
+
+	return wineFilter, nil
+}
+
+func (h *ChatCompletionHandler) callFindWine(
+	ctx context.Context,
+	arguments json.RawMessage,
+	history *[]ConversationMessage,
+	req *msg.Request,
+	model *ConfiguredModel,
+) (responseMessage *msg.Response, err error) {
+	log := logging.WithContext(ctx)
+
+	wineFilter, err := h.parseFilter(ctx, arguments)
+	if err != nil {
+		return responseMessage, err
+	}
+
+	found, wineFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter)
 	if err != nil {
 		return responseMessage, err
 	}
@@ -451,6 +549,9 @@ func (h *ChatCompletionHandler) callFindWine(
 	if err != nil {
 		return responseMessage, err
 	}
+
+	monitoring.TrackRecommend(ctx).SetRecommendationText(text)
+	monitoring.TrackRecommend(ctx).Flush(ctx, h.dbConn)
 
 	*history = append(*history, ConversationMessage{
 		Role:      RoleAssistant,

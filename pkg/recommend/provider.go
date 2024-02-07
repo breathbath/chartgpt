@@ -1,6 +1,8 @@
 package recommend
 
 import (
+	"breathbathChatGPT/pkg/monitoring"
+	"context"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -15,33 +17,58 @@ func NewWineProvider(conn *gorm.DB) *WineProvider {
 	}
 }
 
-func (wp *WineProvider) FindByCriteria(f WineFilter) (found bool, w Wine, err error) {
-	filters := make(map[string]interface{})
+func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (found bool, w Wine, err error) {
+	query := wp.conn.Model(&Wine{})
+
 	if f.Color != "" {
-		filters["color"] = f.Color
+		query.Where("color = ?", f.Color)
 	}
 
 	if f.Country != "" {
-		filters["country"] = f.Country
+		query.Where("country = ?", f.Country)
 	}
 
 	if f.Sugar != "" {
-		filters["sugar"] = f.Sugar
+		query.Where("sugar = ?", f.Sugar)
 	}
 
+	if f.Body != "" {
+		query.Where("body = ?", f.Body)
+	}
+
+	if f.Year > 0 {
+		query.Where("year = ?", f.Year)
+	}
+
+	if f.PriceRange != nil {
+		if f.PriceRange.From > 0 {
+			query.Where("price >= ?", f.PriceRange.From)
+		}
+		if f.PriceRange.To > 0 {
+			query.Where("price <= ?", f.PriceRange.To)
+		}
+	}
+
+	query.Order("RAND()").Order("photo DESC")
+
 	var wine Wine
-	err = wp.conn.
-		Where(filters).
-		Order("RAND()").
-		Order("photo DESC").
-		First(&wine).
-		Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+
+	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		return tx.First(&wine)
+	})
+	monitoring.TrackRecommend(ctx).SetDBQuery(sql)
+
+	res := query.First(&wine)
+
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return false, w, nil
 	}
-	if err != nil {
+	if res.Error != nil {
 		return false, w, err
 	}
+
+	monitoring.TrackRecommend(ctx).SetRecommendedWineID(wine.Article)
+	monitoring.TrackRecommend(ctx).SetRecommendedWineSummary(wine.SummaryStr())
 
 	return true, wine, nil
 }

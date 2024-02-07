@@ -1,40 +1,102 @@
 package recommend
 
 import (
+	"breathbathChatGPT/pkg/utils"
 	"encoding/json"
 	"gorm.io/gorm"
 )
 
 type Wine struct {
 	gorm.Model
-	Color            string `gorm:"size:255"`
-	Sugar            string `gorm:"size:255"`
-	Strength         string `gorm:"size:255"`
-	Photo            string `gorm:"size:255"`
-	Name             string `gorm:"size:255"`
-	Article          string `gorm:"size:255;unique"`
-	RealName         string `gorm:"size:255"`
-	Year             string `gorm:"size:255"`
-	Country          string `gorm:"size:255"`
-	Region           string `gorm:"size:255"`
-	Manufacturer     string `gorm:"size:255"`
-	Grape            string `gorm:"size:255"`
-	Price            float64
-	Body             string `gorm:"size:255"`
-	SmellDescription string `db:"smell_description"`
-	TasteDescription string `db:"taste_description"`
-	FoodDescription  string `db:"food_description"`
-	Style            string
-	Recommend        string `db:"recommend"`
-	Type             string `gorm:"size:255"`
+	Color             string `gorm:"size:255"`
+	Sugar             string `gorm:"size:255"`
+	Photo             string `gorm:"size:255"`
+	Name              string `gorm:"size:255"`
+	Article           string `gorm:"size:255;unique"`
+	RealName          string `gorm:"size:255"`
+	Year              string `gorm:"size:255"`
+	Country           string `gorm:"size:255"`
+	Region            string `gorm:"size:255"`
+	Manufacturer      string `gorm:"size:255"`
+	Grape             string `gorm:"size:255"`
+	Price             float64
+	AlcoholPercentage float64
+	Body              string `gorm:"size:255"`
+	SmellDescription  string
+	TasteDescription  string
+	FoodDescription   string
+	Style             string
+	Recommend         string `db:"recommend"`
+	Type              string `gorm:"size:255"`
+}
+
+type WineSummary struct {
+	Color             string
+	Sugar             string
+	Name              string
+	Article           string
+	RealName          string
+	Year              string
+	Country           string
+	Region            string
+	Manufacturer      string
+	Grape             string
+	Price             float64
+	AlcoholPercentage float64
+	Body              string
+	Style             string
+	Recommend         string
+	Type              string
 }
 
 type WineFilter struct {
-	Color, Sugar, Country string
+	Color, //
+	Sugar, //
+	Country, //
+	Body, //
+	Name,
+	Region,
+	Grape,
+	Type string
+	Year int //
+	AlcoholPercentage,
+	PriceRange *utils.RangeFloat //
+	MatchingDishes,
+	Style []string
 }
 
 func (w Wine) String() string {
 	wineJson, err := json.Marshal(w)
+	if err != nil {
+		return w.Name
+	}
+
+	return string(wineJson)
+}
+
+func (w Wine) Summary() WineSummary {
+	return WineSummary{
+		Color:             w.Color,
+		Sugar:             w.Sugar,
+		Name:              w.Name,
+		Article:           w.Article,
+		RealName:          w.RealName,
+		Year:              w.Year,
+		Country:           w.Country,
+		Region:            w.Region,
+		Manufacturer:      w.Manufacturer,
+		Grape:             w.Grape,
+		Price:             w.Price,
+		AlcoholPercentage: w.AlcoholPercentage,
+		Body:              w.Body,
+		Style:             w.Style,
+		Recommend:         w.Recommend,
+		Type:              w.Type,
+	}
+}
+
+func (w Wine) SummaryStr() string {
+	wineJson, err := json.Marshal(w.Summary())
 	if err != nil {
 		return w.Name
 	}

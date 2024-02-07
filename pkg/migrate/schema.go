@@ -21,7 +21,7 @@ func Execute(dbConn *gorm.DB) error {
 }
 
 func schema(dbConn *gorm.DB) error {
-	err := dbConn.AutoMigrate(recommend.Wine{}, monitoring.UsageStats{})
+	err := dbConn.AutoMigrate(recommend.Wine{}, monitoring.UsageStats{}, monitoring.Recommendation{})
 	if err != nil {
 		return err
 	}

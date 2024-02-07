@@ -61,6 +61,7 @@ func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Route
 		loader,
 		isScopedModeFunc,
 		wineProvider,
+		dbConn,
 	)
 	if err != nil {
 		return nil, err
