@@ -70,17 +70,17 @@ type WineTextualSummary struct {
 }
 
 type WineFilter struct {
-	Color, //
-	Sugar, //
-	Country, //
-	Body, //
+	Color,
+	Sugar,
+	Country,
+	Body,
 	Name,
 	Region,
 	Grape,
-	Type string //
-	Year               int //
-	AlcoholPercentage, //
-	PriceRange *utils.RangeFloat //
+	Type string
+	Year int
+	AlcoholPercentage,
+	PriceRange *utils.RangeFloat
 	MatchingDishes,
 	Style []string
 }

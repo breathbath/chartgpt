@@ -2,10 +2,12 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/Vernacular-ai/godub/converter"
+	"github.com/sirupsen/logrus"
 	"io"
-	"regexp"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -30,30 +32,57 @@ type RangeFloat struct {
 	To   float64
 }
 
-func NormalizeStringArrays(input string) string {
-	re := regexp.MustCompile(`\[([^][]+)]`)
-	matches := re.FindAllStringSubmatch(input, -1)
+func NormalizeJSON(ctx context.Context, input string) string {
+	log := logrus.WithContext(ctx).WithField("function call", "NormalizeJSON")
 
-	for _, match := range matches {
-		nonQuoted := match[1]
-		if nonQuoted != "" {
-			parts := strings.Split(nonQuoted, ",")
-			for i, part := range parts {
-				part = strings.TrimSpace(part)
-				if !isQuoted(part) {
-					parts[i] = strconv.Quote(part)
-				}
-			}
-			quoted := strings.Join(parts, ",")
-			input = strings.Replace(input, "["+nonQuoted+"]", "["+quoted+"]", -1)
-		}
+	minifiedString := strings.ReplaceAll(input, "\n", "")
+	minifiedString = strings.ReplaceAll(minifiedString, "\r", "")
+
+	myCmd := exec.Command("jsonrepair")
+	stdin, err := myCmd.StdinPipe()
+	if err != nil {
+		log.Errorf("Error creating stdin pipe: %v", err)
+		return input
 	}
 
-	return input
-}
+	if _, err := stdin.Write([]byte(minifiedString)); err != nil {
+		log.Errorf("Error writing to stdin: %v", err)
+		return input
+	}
 
-func isQuoted(s string) bool {
-	return len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"'
+	stdin.Close()
+
+	stdout, err := myCmd.StdoutPipe()
+	if err != nil {
+		log.Errorf("Error getting command's stdout: %v", err)
+		return input
+	}
+
+	if err := myCmd.Start(); err != nil {
+		log.Errorf("Error starting command: %v", err)
+		return input
+	}
+
+	stdOut, err := io.ReadAll(stdout)
+	if err != nil {
+		log.Errorf("Error getting command's stdout: %v", err)
+		return input
+	}
+
+	// Wait for the command to finish
+	if err := myCmd.Wait(); err != nil {
+		log.Errorf("Error waiting for command: %v", err)
+	}
+
+	stdErr, err := myCmd.StderrPipe()
+	if err == nil {
+		if stdErrText, err := io.ReadAll(stdErr); err == nil {
+			log.Errorf("command's stderr: %s", string(stdErrText))
+		}
+		return input
+	}
+
+	return string(stdOut)
 }
 
 func ParseRangeFloat(rawRange []interface{}) (rangeRes *RangeFloat) {

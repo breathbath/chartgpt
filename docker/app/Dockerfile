@@ -21,7 +21,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 # Image creation stage
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates ffmpeg
+RUN apk --no-cache add ca-certificates ffmpeg nodejs npm
+RUN npm install -g jsonrepair
 
 WORKDIR /app
 

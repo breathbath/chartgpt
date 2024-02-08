@@ -5,6 +5,8 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"strings"
 )
 
 type WineProvider struct {
@@ -33,11 +35,23 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 	}
 
 	if f.Body != "" {
-		query.Where("body = ?", f.Body)
+		if f.Body != "полнотелое" {
+			query.Where("body != ?", "полнотелое")
+		} else {
+			query.Where("body = ?", f.Body)
+		}
 	}
 
 	if f.Type != "" {
 		query.Where("type = ?", f.Type)
+	}
+
+	if f.Region != "" {
+		query.Where("region LIKE ?", "%"+f.Region+"%")
+	}
+
+	if f.Grape != "" {
+		query.Where("grape LIKE ?", "%"+f.Grape+"%")
 	}
 
 	if f.Year > 0 {
@@ -62,16 +76,39 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 		}
 	}
 
-	query.Order("RAND()").Order("photo DESC")
+	if len(f.Style) > 0 {
+		for i := range f.Style {
+			query.Where("style LIKE ?", "%"+f.Style[i]+"%")
+		}
+	}
+
+	if f.Name != "" {
+		query.Where("MATCH(name, real_name) AGAINST (?)", f.Name)
+		query.Clauses(clause.OrderBy{
+			Expression: clause.Expr{SQL: `MATCH(name, real_name) AGAINST(?) DESC, RAND()`, Vars: []interface{}{f.Name}},
+		})
+	}
+
+	if f.Name == "" {
+		query.Order("RAND()").Order("photo DESC")
+	}
+
+	if len(f.MatchingDishes) > 0 {
+		dishes := strings.Join(f.MatchingDishes, " ")
+		query.Where("MATCH(recommend) AGAINST (?)", dishes)
+		query.Clauses(clause.OrderBy{
+			Expression: clause.Expr{SQL: `MATCH(recommend) AGAINST(?) DESC, RAND()`, Vars: []interface{}{dishes}},
+		})
+	}
 
 	var wine Wine
 
 	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
-		return tx.First(&wine)
+		return tx.Take(&wine)
 	})
 	monitoring.TrackRecommend(ctx).SetDBQuery(sql)
 
-	res := query.First(&wine)
+	res := query.Take(&wine)
 
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return false, w, nil
