@@ -476,6 +476,10 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 		wineFilter.Grape = fmt.Sprint(argumentsMap["виноград"])
 	}
 
+	if argumentsMap["сорт"] != nil {
+		wineFilter.Grape = fmt.Sprint(argumentsMap["сорт"])
+	}
+
 	if argumentsMap["год"] != nil {
 		year, err := strconv.Atoi(fmt.Sprint(argumentsMap["год"]))
 		if err == nil {
