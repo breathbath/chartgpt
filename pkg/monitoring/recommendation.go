@@ -21,6 +21,7 @@ type Recommendation struct {
 	RecommendedWineID      string
 	RecommendationText     string
 	RawModelInput          string
+	RawModelOutput         string
 }
 
 func (us *Recommendation) SetUserID(userID string) {
@@ -64,6 +65,17 @@ func (us *Recommendation) SetRawModelInput(modelInput interface{}) {
 	us.cache()
 }
 
+func (us *Recommendation) SetRawModelOutput(modelOutput interface{}) {
+	data, err := json.Marshal(modelOutput)
+	if err != nil {
+		us.RawModelOutput = fmt.Sprint(modelOutput)
+	} else {
+		us.RawModelOutput = string(data)
+	}
+
+	us.cache()
+}
+
 func (us *Recommendation) SetRecommendationText(recommendationText string) {
 	us.RecommendationText = recommendationText
 	us.cache()
@@ -78,6 +90,7 @@ type RecommendationI interface {
 	SetRecommendedWineID(id string)
 	SetRawModelInput(input interface{})
 	SetRecommendationText(recommendationText string)
+	SetRawModelOutput(modelOutput interface{})
 	Flush(ctx context.Context, conn *gorm.DB)
 }
 

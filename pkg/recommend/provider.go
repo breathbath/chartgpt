@@ -36,6 +36,10 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 		query.Where("body = ?", f.Body)
 	}
 
+	if f.Type != "" {
+		query.Where("type = ?", f.Type)
+	}
+
 	if f.Year > 0 {
 		query.Where("year = ?", f.Year)
 	}
@@ -46,6 +50,15 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 		}
 		if f.PriceRange.To > 0 {
 			query.Where("price <= ?", f.PriceRange.To)
+		}
+	}
+
+	if f.AlcoholPercentage != nil {
+		if f.AlcoholPercentage.From > 0 {
+			query.Where("alcohol_percentage >= ?", f.AlcoholPercentage.From)
+		}
+		if f.AlcoholPercentage.To > 0 {
+			query.Where("alcohol_percentage <= ?", f.AlcoholPercentage.To)
 		}
 	}
 

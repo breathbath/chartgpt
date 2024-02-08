@@ -12,6 +12,8 @@ var migrations = []*gormigrate.Migration{
 	files.Migration20230203110301,
 	files.Migration20230206004501,
 	files.Migration20230206004502,
+	files.Migration20230207225802,
+	files.Migration20230208092100,
 }
 
 func data(conn *gorm.DB) error {

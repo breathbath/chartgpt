@@ -7,8 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
@@ -35,9 +35,13 @@ const (
 	ConversationTimeout           = time.Minute * 10
 	MaxScopedConversationMessages = 20
 	VoiceToTextModel              = "whisper-1"
-	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. На другие темы отвечай что ты не знаешь что ответить. запрашивай информацию о цвете и сахаре. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб.
-`
+	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. На другие темы отвечай что ты не знаешь что ответить. запрашивай информацию о цвете и сахаре. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
 )
+
+var colors = []string{"Белое", "Розовое", "Красное", "Оранжевое"}
+var sugars = []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"}
+var bodies = []string{"полнотелое", "неполнотелое"}
+var types = []string{"вино", "игристое", "шампанское", "херес", "портвейн"}
 
 type ChatCompletionHandler struct {
 	cfg            *Config
@@ -262,14 +266,14 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 			"properties": map[string]interface{}{
 				"цвет": map[string]interface{}{
 					"type": "string",
-					"enum": []string{"Белое", "Розовое", "Красное", "Оранжевое"},
+					"enum": colors,
 				},
 				"год": map[string]interface{}{
 					"type": "number",
 				},
 				"сахар": map[string]interface{}{
 					"type": "string",
-					"enum": []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"},
+					"enum": sugars,
 				},
 				"крепость": map[string]interface{}{
 					"type": "array",
@@ -285,7 +289,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 				},
 				"тело": map[string]interface{}{
 					"type": "string",
-					"enum": []string{"полнотелое"},
+					"enum": bodies,
 				},
 				"название": map[string]interface{}{
 					"type": "string",
@@ -301,7 +305,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 				},
 				"тип": map[string]interface{}{
 					"type": "string",
-					"enum": []string{"вино", "игристое", "шампанское", "херес", "портвейн"},
+					"enum": types,
 				},
 				"стиль": map[string]interface{}{
 					"type": "array",
@@ -317,7 +321,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 					},
 				},
 			},
-			"required": []string{"цвет", "сахар", "цена"},
+			"required": []string{"цвет", "сахар"},
 		},
 	}
 	requestData := map[string]interface{}{
@@ -343,6 +347,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	if err != nil {
 		return nil, err
 	}
+
+	monitoring.TrackRecommend(ctx).SetRawModelOutput(chatResp)
 
 	monitoring.Usage(ctx).SetInputPromptTokens(chatResp.Usage.PromptTokens)
 	monitoring.Usage(ctx).SetInputCompletionTokens(chatResp.Usage.CompletionTokens)
@@ -422,7 +428,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
 }
 
-const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания, в конце выдавай информацию о цене. Не повторяй название вина больше одного раза.`
+const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания. Избегай повторов в выдаваемом тексте.`
 const NotFoundMessage = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 
 func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
@@ -432,11 +438,12 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 		return nil, err
 	}
 
+	data = utils.NormalizeStringArrays(data)
 	var argumentsMap map[string]interface{}
 
 	err = json.Unmarshal([]byte(data), &argumentsMap)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to parse arguments list")
 	}
 
 	monitoring.TrackRecommend(ctx).SetFunctionCall(data)
@@ -446,11 +453,11 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 	logging.Debugf("FunctionCall call: %q", string(arguments))
 
 	if argumentsMap["цвет"] != nil {
-		wineFilter.Color = fmt.Sprint(argumentsMap["цвет"])
+		wineFilter.Color = utils.ParseEnumStr(argumentsMap["цвет"], colors)
 	}
 
 	if argumentsMap["сахар"] != nil {
-		wineFilter.Sugar = fmt.Sprint(argumentsMap["сахар"])
+		wineFilter.Sugar = utils.ParseEnumStr(argumentsMap["сахар"], sugars)
 	}
 
 	if argumentsMap["страна"] != nil {
@@ -487,11 +494,11 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 	}
 
 	if argumentsMap["тело"] != nil {
-		wineFilter.Body = fmt.Sprint(argumentsMap["тело"])
+		wineFilter.Body = utils.ParseEnumStr(argumentsMap["тело"], bodies)
 	}
 
 	if argumentsMap["тип"] != nil {
-		wineFilter.Type = fmt.Sprint(argumentsMap["тип"])
+		wineFilter.Type = utils.ParseEnumStr(argumentsMap["тип"], types)
 	}
 
 	if argumentsMap["название"] != nil {
@@ -540,6 +547,7 @@ func (h *ChatCompletionHandler) callFindWine(
 			Text:      "Ничего не найдено",
 			CreatedAt: time.Now().Unix(),
 		})
+		monitoring.TrackRecommend(ctx).Flush(ctx, h.dbConn)
 		return &msg.Response{Message: NotFoundMessage}, nil
 	}
 
@@ -591,7 +599,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 		Messages: []ConversationMessage{
 			{
 				Role:      RoleUser,
-				Text:      w.String(),
+				Text:      w.WineTextualSummaryStr(),
 				CreatedAt: time.Now().Unix(),
 			},
 		},
@@ -628,6 +636,8 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 
 	if respMessage == "" {
 		respMessage = w.String()
+	} else {
+		respMessage += fmt.Sprintf(" Цена %.f руб", w.Price)
 	}
 
 	return respMessage, nil

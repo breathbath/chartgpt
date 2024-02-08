@@ -49,6 +49,26 @@ type WineSummary struct {
 	Type              string
 }
 
+type WineTextualSummary struct {
+	Color             string  `json:"Цвет"`
+	Sugar             string  `json:"Сахар"`
+	Name              string  `json:"Название лат"`
+	RealName          string  `json:"Название рус"`
+	Year              string  `json:"Год"`
+	Country           string  `json:"Страна"`
+	Region            string  `json:"Регион"`
+	Manufacturer      string  `json:"Производитель"`
+	Grape             string  `json:"Сорт винограда"`
+	AlcoholPercentage float64 `json:"Крепость"`
+	Body              string  `json:"Тело"`
+	SmellDescription  string  `json:"Аромат"`
+	TasteDescription  string  `json:"Вкус"`
+	FoodDescription   string  `json:"Гастрономия"`
+	Style             string  `json:"Стиль"`
+	Recommend         string  `json:"Рекомендованные блюда"`
+	Type              string  `json:"Тип напитка"`
+}
+
 type WineFilter struct {
 	Color, //
 	Sugar, //
@@ -57,9 +77,9 @@ type WineFilter struct {
 	Name,
 	Region,
 	Grape,
-	Type string
-	Year int //
-	AlcoholPercentage,
+	Type string //
+	Year               int //
+	AlcoholPercentage, //
 	PriceRange *utils.RangeFloat //
 	MatchingDishes,
 	Style []string
@@ -93,6 +113,37 @@ func (w Wine) Summary() WineSummary {
 		Recommend:         w.Recommend,
 		Type:              w.Type,
 	}
+}
+
+func (w Wine) WineTextualSummary() WineTextualSummary {
+	return WineTextualSummary{
+		Color:             w.Color,
+		Sugar:             w.Sugar,
+		Name:              w.Name,
+		RealName:          w.RealName,
+		Year:              w.Year,
+		Country:           w.Country,
+		Region:            w.Region,
+		Manufacturer:      w.Manufacturer,
+		Grape:             w.Grape,
+		AlcoholPercentage: w.AlcoholPercentage,
+		Body:              w.Body,
+		SmellDescription:  w.SmellDescription,
+		TasteDescription:  w.TasteDescription,
+		FoodDescription:   w.FoodDescription,
+		Style:             w.Style,
+		Recommend:         w.Recommend,
+		Type:              w.Type,
+	}
+}
+
+func (w Wine) WineTextualSummaryStr() string {
+	wineJson, err := json.Marshal(w.WineTextualSummary())
+	if err != nil {
+		return w.Name
+	}
+
+	return string(wineJson)
 }
 
 func (w Wine) SummaryStr() string {

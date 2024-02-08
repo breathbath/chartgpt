@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/Vernacular-ai/godub/converter"
 	"io"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 func ConvertAudioFileFromOggToMp3(oggFile io.ReadCloser) (io.Reader, error) {
@@ -25,6 +28,32 @@ func ConvertAudioFileFromOggToMp3(oggFile io.ReadCloser) (io.Reader, error) {
 type RangeFloat struct {
 	From float64
 	To   float64
+}
+
+func NormalizeStringArrays(input string) string {
+	re := regexp.MustCompile(`\[([^][]+)]`)
+	matches := re.FindAllStringSubmatch(input, -1)
+
+	for _, match := range matches {
+		nonQuoted := match[1]
+		if nonQuoted != "" {
+			parts := strings.Split(nonQuoted, ",")
+			for i, part := range parts {
+				part = strings.TrimSpace(part)
+				if !isQuoted(part) {
+					parts[i] = strconv.Quote(part)
+				}
+			}
+			quoted := strings.Join(parts, ",")
+			input = strings.Replace(input, "["+nonQuoted+"]", "["+quoted+"]", -1)
+		}
+	}
+
+	return input
+}
+
+func isQuoted(s string) bool {
+	return len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"'
 }
 
 func ParseRangeFloat(rawRange []interface{}) (rangeRes *RangeFloat) {
@@ -49,6 +78,17 @@ func ParseRangeFloat(rawRange []interface{}) (rangeRes *RangeFloat) {
 	}
 
 	return rangeRes
+}
+
+func ParseEnumStr(rawVal interface{}, enums []string) string {
+	result := fmt.Sprint(rawVal)
+	for i := range enums {
+		if strings.ToLower(result) == strings.ToLower(enums[i]) {
+			return result
+		}
+	}
+
+	return ""
 }
 
 func ParseStrings(rawValues []interface{}) []string {
@@ -82,6 +122,11 @@ func ParseFloat(rawFloat interface{}) (float64, bool) {
 	intVal64, ok := rawFloat.(int64)
 	if ok {
 		return float64(intVal64), true
+	}
+
+	fl64, err := strconv.ParseFloat(fmt.Sprint(rawFloat), 64)
+	if err == nil {
+		return fl64, true
 	}
 
 	return 0, false
