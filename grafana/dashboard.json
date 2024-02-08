@@ -74,6 +74,118 @@
       "gridPos": {
         "h": 11,
         "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "dataset": "wine",
+          "datasource": {
+            "type": "mysql",
+            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          },
+          "table": "usage_stats"
+        }
+      ],
+      "title": "Unique Users",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "mysql",
+        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
         "x": 12,
         "y": 0
       },
@@ -167,6 +279,66 @@
         "type": "mysql",
         "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
       },
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 4,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "dataset": "wine",
+          "datasource": {
+            "type": "mysql",
+            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  *\nFROM\n  wine.recommendations\nWHERE \n  $__timeFilter(created_at)\nLIMIT\n  50",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          },
+          "table": "usage_stats"
+        }
+      ],
+      "title": "Recommendation Tracking",
+      "transformations": [],
+      "transparent": true,
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "mysql",
+        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -198,7 +370,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 31
       },
       "id": 2,
       "options": {
@@ -246,181 +418,9 @@
           "table": "usage_stats"
         }
       ],
-      "title": "Raw Data",
+      "title": "Token Usage",
       "transformations": [],
       "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "mysql",
-        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unitScale": true
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 11,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
-      },
-      "targets": [
-        {
-          "dataset": "wine",
-          "datasource": {
-            "type": "mysql",
-            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          },
-          "table": "usage_stats"
-        }
-      ],
-      "title": "Unique Users",
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c",
-        "type": "mysql"
-      },
-      "gridPos": {
-        "h": 20,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 4,
-      "pluginVersion": "10.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "mysql",
-            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
-          },
-          "dataset": "wine",
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  *\nFROM\n  wine.recommendations\nWHERE \n  $__timeFilter(created_at)\nLIMIT\n  50",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          },
-          "table": "usage_stats"
-        }
-      ],
-      "title": "Recommendation Tracking",
-      "transformations": [],
-      "type": "logs",
-      "transparent": true,
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      }
     }
   ],
   "refresh": "",
@@ -437,6 +437,6 @@
   "timezone": "",
   "title": "Usage Statistics",
   "uid": "b245aa9a-dcf5-4d2c-bb75-634668c18551",
-  "version": 2,
+  "version": 7,
   "weekStart": ""
 }
