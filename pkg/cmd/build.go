@@ -84,7 +84,8 @@ func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Route
 	}
 	helpHandler := help.NewHandler(isScopedModeFunc, isAdminDetector, helpProviders)
 	likeHandler := monitoring.NewLikeHandler(dbConn, chatCompletionHandler)
-	favoritesHandler := recommend.NewAddToFavoritesHandler(dbConn, chatCompletionHandler)
+	addToFavoritesHandler := recommend.NewAddToFavoritesHandler(dbConn, chatCompletionHandler)
+	listFavorites := recommend.NewListFavoritesHandler(dbConn, chatCompletionHandler)
 
 	r := &msg.Router{
 		Handlers: []msg.Handler{
@@ -93,7 +94,8 @@ func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Route
 			helpHandler,
 			logoutHandler,
 			likeHandler,
-			favoritesHandler,
+			addToFavoritesHandler,
+			listFavorites,
 			setConversationCtxHandler,
 			resetConversationHandler,
 			setModelHandler,
