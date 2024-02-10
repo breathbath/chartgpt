@@ -154,3 +154,10 @@ func (w Wine) SummaryStr() string {
 
 	return string(wineJson)
 }
+
+type WineFavorite struct {
+	gorm.Model
+	WineID    int
+	Wine      Wine `gorm:"constraint:OnDelete:CASCADE;"`
+	UserLogin string
+}

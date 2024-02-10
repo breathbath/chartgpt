@@ -2,8 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"math/rand"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func ExtractCommandValue(rawMsg, command string) string {
@@ -30,4 +32,12 @@ func MatchesCommand(msg, command string) bool {
 	command = strings.TrimPrefix(command, "/")
 	re := regexp.MustCompile(fmt.Sprintf(`^/\b%s\b`, command))
 	return re.MatchString(msg)
+}
+
+func SelectRandomMessage(messages []string) string {
+	rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(messages))
+
+	randomMessage := messages[randomIndex]
+	return randomMessage
 }

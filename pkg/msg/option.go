@@ -9,7 +9,16 @@ const (
 	OutputFormatHTML
 )
 
-type PredefinedResponse string
+const (
+	PredefinedResponseOutline = "outline"
+	PredefinedResponseInline  = "inline"
+)
+
+type PredefinedResponse struct {
+	Text string
+	Data string
+	Type string
+}
 
 type PredefinedResponseOptions struct {
 	Responses []PredefinedResponse
@@ -30,7 +39,7 @@ func (o *Options) WithIsResponseToHiddenMessage() {
 	o.isResponseToHiddenMessage = true
 }
 
-func (o *Options) WithPredefinedResponse(r string) {
+func (o *Options) WithPredefinedResponse(resp PredefinedResponse) {
 	if o.predefinedResponseOptions == nil {
 		o.predefinedResponseOptions = &PredefinedResponseOptions{}
 	}
@@ -39,7 +48,7 @@ func (o *Options) WithPredefinedResponse(r string) {
 		o.predefinedResponseOptions.Responses = []PredefinedResponse{}
 	}
 
-	o.predefinedResponseOptions.Responses = append(o.predefinedResponseOptions.Responses, PredefinedResponse(r))
+	o.predefinedResponseOptions.Responses = append(o.predefinedResponseOptions.Responses, resp)
 }
 
 func (o *Options) WithIsTempPredefinedResponse() {

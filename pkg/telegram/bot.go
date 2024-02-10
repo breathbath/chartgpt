@@ -3,7 +3,6 @@ package telegram
 import (
 	"breathbathChatGPT/pkg/errs"
 	"breathbathChatGPT/pkg/logging"
-	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"context"
 	"fmt"
@@ -11,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/telebot.v3"
 	"gorm.io/gorm"
-	"time"
+	"strings"
 )
 
 type Bot struct {
@@ -52,16 +51,6 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 		sender.ID = id
 		sender.LastName = telegramSender.LastName
 		sender.FirstName = telegramSender.FirstName
-
-		monitoring.Usage(ctx).SetUserId(id)
-		monitoring.TrackRecommend(ctx).SetUserID(id)
-		if telegramSender.LastName != "" {
-			monitoring.Usage(ctx).SetLastName(telegramSender.LastName)
-		}
-
-		if telegramSender.FirstName != "" {
-			monitoring.Usage(ctx).SetFirstName(telegramSender.FirstName)
-		}
 	}
 
 	var conversationID int64
@@ -88,6 +77,19 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 		Message:  telegramCtx.Text(),
 		Meta:     meta,
 	}
+
+	callback := telegramCtx.Callback()
+	if callback != nil {
+		req.ID = callback.MessageID
+		meta["callback"] = map[string]interface{}{
+			"MessageID": callback.MessageID,
+			"Message":   callback.Data,
+			"Unique":    callback.Unique,
+			"Data":      callback.Data,
+		}
+		req.Message = strings.TrimLeft(callback.Data, "\f")
+	}
+
 	if telegramMsg.Voice != nil {
 		voiceFile := telegramMsg.Voice.MediaFile()
 		reader, err := b.baseBot.File(voiceFile)
@@ -134,7 +136,10 @@ func (b *Bot) sendMessageSuccess(
 	log := logrus.WithContext(ctx)
 
 	if resp.Media != nil && resp.Media.IsBeforeMessage {
-		err := b.sendMedia(ctx, telegramMsg, resp, senderOpts)
+		senderOptsMedia := &telebot.SendOptions{
+			ParseMode: senderOpts.ParseMode,
+		}
+		err := b.sendMedia(ctx, telegramMsg, resp, senderOptsMedia)
 		if err != nil {
 			return errors.Wrapf(err, "failed to send media:\n%+v", resp.Media)
 		}
@@ -236,19 +241,43 @@ func (b *Bot) processResponseMessage(
 	log.Debugf("telegram media:\n%+v", resp.Media)
 
 	replyButtonsGroups := [][]telebot.ReplyButton{}
+	inlineButtonGroups := [][]telebot.InlineButton{}
 	for i, predefinedResp := range resp.Options.GetPredefinedResponses() {
-		if predefinedResp == "" {
+		if predefinedResp.Text == "" {
 			continue
 		}
-		if i%3 == 0 {
-			replyButtonsGroups = append(replyButtonsGroups, []telebot.ReplyButton{})
+		if predefinedResp.Type == msg.PredefinedResponseInline {
+			if len(inlineButtonGroups) == 0 {
+				inlineButtonGroups = append(inlineButtonGroups, []telebot.InlineButton{})
+			}
+			inlineButtonGroups[0] = append(inlineButtonGroups[0], telebot.InlineButton{
+				Text: predefinedResp.Text,
+				Data: predefinedResp.Data,
+			})
+			continue
 		}
 
-		lastGroupIndex := len(replyButtonsGroups) - 1
-		replyButtonsGroups[lastGroupIndex] = append(
-			replyButtonsGroups[lastGroupIndex],
-			telebot.ReplyButton{Text: string(predefinedResp)},
-		)
+		if i%3 == 0 {
+			if predefinedResp.Type == msg.PredefinedResponseInline {
+				inlineButtonGroups = append(inlineButtonGroups, []telebot.InlineButton{})
+			} else {
+				replyButtonsGroups = append(replyButtonsGroups, []telebot.ReplyButton{})
+			}
+		}
+
+		if predefinedResp.Type == msg.PredefinedResponseInline {
+			lastGroupIndex := len(inlineButtonGroups) - 1
+			inlineButtonGroups[lastGroupIndex] = append(
+				inlineButtonGroups[lastGroupIndex],
+				telebot.InlineButton{Text: predefinedResp.Text},
+			)
+		} else {
+			lastGroupIndex := len(replyButtonsGroups) - 1
+			replyButtonsGroups[lastGroupIndex] = append(
+				replyButtonsGroups[lastGroupIndex],
+				telebot.ReplyButton{Text: predefinedResp.Text},
+			)
+		}
 	}
 
 	if len(replyButtonsGroups) > 0 {
@@ -256,6 +285,14 @@ func (b *Bot) processResponseMessage(
 			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
 			ReplyKeyboard:   replyButtonsGroups,
 			ResizeKeyboard:  true,
+		}
+		senderOpts.ReplyMarkup = rm
+	}
+
+	if len(inlineButtonGroups) > 0 {
+		rm := &telebot.ReplyMarkup{
+			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
+			InlineKeyboard:  inlineButtonGroups,
 		}
 		senderOpts.ReplyMarkup = rm
 	}
@@ -288,15 +325,8 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 
 	log.Debugf("got telegram message: %q", telegramContext.Text())
 
-	monitoring.Usage(ctx).SetSessionStart(time.Now().UTC())
-	defer func() {
-		monitoring.Usage(ctx).SetSessionEnd(time.Now().UTC())
-		monitoring.Usage(ctx).Flush(ctx, b.dbConn)
-	}()
-
 	req, err := b.botMsgToRequest(ctx, telegramContext)
 	if err != nil {
-		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
@@ -307,13 +337,11 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 			log.Errorf("failed to send error message to the sender: %v", sendErr)
 		}
 
-		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
 	err = b.processResponseMessage(ctx, telegramContext, resp)
 	if err != nil {
-		monitoring.Usage(ctx).SetError(err)
 		return err
 	}
 
@@ -336,6 +364,18 @@ func (b *Bot) Start() {
 	})
 
 	b.baseBot.Handle(telebot.OnVoice, func(c telebot.Context) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		ctxT := logging.WithTrackingId(ctx)
+		err := b.handle(ctxT, c)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	b.baseBot.Handle(telebot.OnCallback, func(c telebot.Context) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 

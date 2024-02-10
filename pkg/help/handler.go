@@ -46,7 +46,10 @@ func (ch *Handler) CanHandle(_ context.Context, req *msg.Request) (bool, error) 
 
 func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	op := &msg.Options{}
-	op.WithPredefinedResponse(helpCommand)
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: helpCommand,
+		Type: msg.PredefinedResponseOutline,
+	})
 
 	help := fmt.Sprintf(`List of available commands
 
@@ -56,7 +59,7 @@ func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response,
 		helpResult := prov.GetHelp(ctx, req)
 
 		if helpResult.PredefinedOption != "" {
-			op.WithPredefinedResponse(helpResult.PredefinedOption)
+			op.WithPredefinedResponse(msg.PredefinedResponse{Text: helpResult.PredefinedOption, Type: msg.PredefinedResponseInline})
 		}
 
 		if helpResult.Text == "" {

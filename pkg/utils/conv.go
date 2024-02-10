@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/Vernacular-ai/godub/converter"
 	"github.com/sirupsen/logrus"
@@ -159,4 +160,13 @@ func ParseFloat(rawFloat interface{}) (float64, bool) {
 	}
 
 	return 0, false
+}
+
+func ConvToStr(input interface{}) string {
+	rawInputData, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Sprint(input)
+	}
+
+	return string(rawInputData)
 }

@@ -19,7 +19,11 @@ func NewWineProvider(conn *gorm.DB) *WineProvider {
 	}
 }
 
-func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (found bool, w Wine, err error) {
+func (wp *WineProvider) FindByCriteria(
+	ctx context.Context,
+	f *WineFilter,
+	recommendStats *monitoring.Recommendation,
+) (found bool, w Wine, err error) {
 	query := wp.conn.Model(&Wine{})
 
 	if f.Color != "" {
@@ -106,7 +110,7 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
 		return tx.Take(&wine)
 	})
-	monitoring.TrackRecommend(ctx).SetDBQuery(sql)
+	recommendStats.DBQuery = sql
 
 	res := query.Take(&wine)
 
@@ -116,9 +120,6 @@ func (wp *WineProvider) FindByCriteria(ctx context.Context, f *WineFilter) (foun
 	if res.Error != nil {
 		return false, w, err
 	}
-
-	monitoring.TrackRecommend(ctx).SetRecommendedWineID(wine.Article)
-	monitoring.TrackRecommend(ctx).SetRecommendedWineSummary(wine.SummaryStr())
 
 	return true, wine, nil
 }

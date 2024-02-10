@@ -210,7 +210,10 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	sort.Strings(modelIDs)
 	for i, modelID := range modelIDs {
 		if strings.HasPrefix(modelID, "gpt-") {
-			opts.WithPredefinedResponse(fmt.Sprintf("/model %s", modelID))
+			opts.WithPredefinedResponse(msg.PredefinedResponse{
+				Text: fmt.Sprintf("/model %s", modelID),
+				Type: msg.PredefinedResponseOutline,
+			})
 		}
 
 		if modelID == currentModel.GetName() {

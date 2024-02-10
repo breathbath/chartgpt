@@ -1,6 +1,7 @@
 package chatgpt
 
 import (
+	logging2 "breathbathChatGPT/pkg/logging"
 	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/utils"
@@ -35,7 +36,9 @@ const (
 	ConversationTimeout           = time.Minute * 10
 	MaxScopedConversationMessages = 20
 	VoiceToTextModel              = "whisper-1"
-	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. Все рекомендации вин нужно делать путем вызова фукции find_wine. На другие темы отвечай что ты не знаешь что ответить. запрашивай информацию о цвете и сахаре. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
+	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. Все рекомендации вин нужно делать путем вызова фукции find_wine. На другие темы отвечай что ты не знаешь что ответить. Если запрос слишком общий, задавай уточняющие вопросы по цвету, сахару, стране, региону сорту винограда, цене, крепости. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
+	DescriptionContext            = `ты формулируешь описания вин для сайта. Избегай повторов в выдаваемом тексте. Выдавай вначале название сахар, цвет, название, страну, год вина. Выдавай эмоциональный, красивый, продающий текст как бы это делал сомелье.`
+	NotFoundMessage               = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 )
 
 var colors = []string{"Белое", "Розовое", "Красное", "Оранжевое"}
@@ -152,8 +155,13 @@ func (h *ChatCompletionHandler) isConversationOutdated(conv *Conversation, timeo
 }
 
 func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg.Request) (string, error) {
-	monitoring.Usage(ctx).SetIsVoiceInput(true)
-
+	usageStats := &monitoring.UsageStats{
+		UserId:       req.Sender.GetID(),
+		SessionStart: time.Now().UTC(),
+		GPTModel:     VoiceToTextModel,
+		Type:         "voiceToText",
+	}
+	usageStats.SetTrackingID(ctx)
 	log := logging.WithContext(ctx)
 
 	outputFile, err := utils.ConvertAudioFileFromOggToMp3(req.File.FileReader)
@@ -184,7 +192,6 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 	if err != nil {
 		return "", err
 	}
-	monitoring.Usage(ctx).SetVoiceToTextModel(VoiceToTextModel)
 
 	err = writer.Close()
 	if err != nil {
@@ -202,6 +209,8 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 		return "", err
 	}
 	defer response.Body.Close()
+
+	usageStats.SessionEnd = time.Now().UTC()
 
 	dump, err := httputil.DumpResponse(response, true)
 	if err != nil {
@@ -226,6 +235,9 @@ func (h *ChatCompletionHandler) convertVoiceToText(ctx context.Context, req *msg
 		log.Errorf("failed to pack response data into AudioToTextResponse model: %v", err)
 		return "", errors.New("failed to interpret ChatGPT response")
 	}
+
+	usageStats.Input = textResp.Text
+	usageStats.Save(ctx, h.dbConn)
 
 	return textResp.Text, nil
 }
@@ -255,8 +267,13 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		CreatedAt: time.Now().Unix(),
 	})
 
-	monitoring.Usage(ctx).SetInput(req.Message)
-	monitoring.TrackRecommend(ctx).SetUserPrompt(req.Message)
+	usageStats := &monitoring.UsageStats{
+		UserId:       req.Sender.GetID(),
+		SessionStart: time.Now().UTC(),
+		GPTModel:     model.GetName(),
+		Type:         "recommendation",
+	}
+	usageStats.SetTrackingID(ctx)
 
 	findWineFunction := map[string]interface{}{
 		"name":        "find_wine",
@@ -341,25 +358,37 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	reqsr.WithPOST()
 	reqsr.WithInput(requestData)
 
-	monitoring.TrackRecommend(ctx).SetRawModelInput(requestData)
+	recommendStats := &monitoring.Recommendation{
+		UserID:         req.Sender.GetID(),
+		RawModelInput:  utils.ConvToStr(requestData),
+		RawModelOutput: utils.ConvToStr(chatResp),
+		UserPrompt:     req.Message,
+	}
+	recommendStats.SetTrackingID(ctx)
 
 	err = reqsr.Request(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	monitoring.TrackRecommend(ctx).SetRawModelOutput(chatResp)
+	inputBytes, err := json.Marshal(requestData)
+	if err != nil {
+		inputBytes = []byte{}
+	}
+	usageStats.Input = string(inputBytes)
 
-	monitoring.Usage(ctx).SetInputPromptTokens(chatResp.Usage.PromptTokens)
-	monitoring.Usage(ctx).SetInputCompletionTokens(chatResp.Usage.CompletionTokens)
-	monitoring.Usage(ctx).SetGPTModel(model.GetName())
+	usageStats.InputCompletionTokens = chatResp.Usage.CompletionTokens
+	usageStats.InputPromptTokens = chatResp.Usage.PromptTokens
+	usageStats.SessionEnd = time.Now().UTC()
+	usageStats.Save(ctx, h.dbConn)
 
 	messages := make([]string, 0, len(chatResp.Choices))
 	var media *msg.Media
+	var options *msg.Options
 	for i := range chatResp.Choices {
 		choice := chatResp.Choices[i]
 		if choice.FinishReason == "tool_calls" {
-			response, err := h.processToolCall(ctx, choice, &conversation.Messages, req, model)
+			response, err := h.processToolCall(ctx, choice, &conversation.Messages, req, recommendStats)
 			if err != nil {
 				return nil, err
 			}
@@ -369,6 +398,9 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 			}
 			if response.Media != nil {
 				media = response.Media
+			}
+			if response.Options != nil {
+				options = response.Options
 			}
 		} else {
 			if choice.Message.Content == "" {
@@ -399,6 +431,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		Message: strings.Join(messages, "/n"),
 		Type:    msg.Success,
 		Media:   media,
+		Options: options,
 	}, nil
 }
 
@@ -407,7 +440,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	choice ChatCompletionChoice,
 	history *[]ConversationMessage,
 	req *msg.Request,
-	model *ConfiguredModel,
+	recommendStats *monitoring.Recommendation,
 ) (responseMessage *msg.Response, err error) {
 	log := logging.WithContext(ctx)
 
@@ -419,7 +452,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	for i := range choice.Message.ToolCalls {
 		toolCall := choice.Message.ToolCalls[i]
 		if toolCall.Function.Name == "find_wine" {
-			return h.callFindWine(ctx, toolCall.Function.Arguments, history, req, model)
+			return h.callFindWine(ctx, toolCall.Function.Arguments, history, req, recommendStats)
 		}
 	}
 
@@ -427,9 +460,6 @@ func (h *ChatCompletionHandler) processToolCall(
 
 	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
 }
-
-const DescriptionContext = `ты формулируешь описания вин для сайта. Начинай описание так: <цвет вина> <сахар>  вино <название> <год> года, <страна> и дальше текст описания. Избегай повторов в выдаваемом тексте.`
-const NotFoundMessage = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 
 func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
 	logging.Debugf("GPT Function call: %q", string(arguments))
@@ -451,8 +481,6 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 			return nil, nil
 		}
 	}
-
-	monitoring.TrackRecommend(ctx).SetFunctionCall(data)
 
 	wineFilter := &recommend.WineFilter{}
 
@@ -535,7 +563,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	arguments json.RawMessage,
 	history *[]ConversationMessage,
 	req *msg.Request,
-	model *ConfiguredModel,
+	recommendStats *monitoring.Recommendation,
 ) (responseMessage *msg.Response, err error) {
 	log := logging.WithContext(ctx)
 
@@ -544,7 +572,7 @@ func (h *ChatCompletionHandler) callFindWine(
 		return responseMessage, err
 	}
 
-	found, wineFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter)
+	found, wineFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats)
 	if err != nil {
 		return responseMessage, err
 	}
@@ -555,19 +583,22 @@ func (h *ChatCompletionHandler) callFindWine(
 			Text:      "Ничего не найдено",
 			CreatedAt: time.Now().Unix(),
 		})
-		monitoring.TrackRecommend(ctx).Flush(ctx, h.dbConn)
+		recommendStats.Save(ctx, h.dbConn)
 		return &msg.Response{Message: NotFoundMessage}, nil
 	}
 
 	log.Debugf("Found wine: %q", wineFromDb.String())
 
-	text, err := h.generateWineAnswer(ctx, req, wineFromDb, model)
+	text, err := h.generateWineAnswer(ctx, req, wineFromDb)
 	if err != nil {
 		return responseMessage, err
 	}
 
-	monitoring.TrackRecommend(ctx).SetRecommendationText(text)
-	monitoring.TrackRecommend(ctx).Flush(ctx, h.dbConn)
+	recommendStats.FunctionCall = string(arguments)
+	recommendStats.RecommendationText = text
+	recommendStats.RecommendedWineID = wineFromDb.Article
+	recommendStats.RecommendedWineSummary = wineFromDb.WineTextualSummaryStr()
+	recommendStats.Save(ctx, h.dbConn)
 
 	*history = append(*history, ConversationMessage{
 		Role:      RoleAssistant,
@@ -587,17 +618,78 @@ func (h *ChatCompletionHandler) callFindWine(
 		}
 	}
 
+	op := &msg.Options{}
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "❤️ " + "Нравится",
+		Type: msg.PredefinedResponseInline,
+		Data: h.buildLikeQuery(ctx),
+	})
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "📌️ " + "Запомнить",
+		Type: msg.PredefinedResponseInline,
+		Data: "/add_to_favorites " + wineFromDb.Article,
+	})
+	respMessage.Options = op
+
 	return respMessage, nil
+}
+
+func (h *ChatCompletionHandler) buildLikeQuery(ctx context.Context) string {
+	log := logging.WithContext(ctx)
+	trackingIdI := ctx.Value(logging2.TrackingIDKey)
+	trackingId := ""
+	if trackingIdI != nil {
+		trackingId = trackingIdI.(string)
+	} else {
+		log.Error("failed to find tracking id")
+	}
+
+	return fmt.Sprintf("%s %s", monitoring.LikeCommand, trackingId)
 }
 
 func (h *ChatCompletionHandler) generateWineAnswer(
 	ctx context.Context,
 	req *msg.Request,
 	w recommend.Wine,
-	model *ConfiguredModel,
 ) (string, error) {
+	respMessage, err := h.GenerateResponse(
+		ctx,
+		DescriptionContext,
+		w.WineTextualSummaryStr(),
+		"wine_card",
+		req,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if respMessage == "" {
+		respMessage = w.String()
+	} else {
+		respMessage += fmt.Sprintf(" Цена %.f руб", w.Price)
+	}
+
+	return respMessage, nil
+}
+
+func (h *ChatCompletionHandler) GenerateResponse(
+	ctx context.Context,
+	contextMsg,
+	message, typ string,
+	req *msg.Request,
+) (string, error) {
+	usageStats := &monitoring.UsageStats{
+		UserId:       req.Sender.GetID(),
+		SessionStart: time.Now().UTC(),
+		Type:         typ,
+	}
+	usageStats.SetTrackingID(ctx)
+
+	log := logging.WithContext(ctx)
+	model := h.settingsLoader.LoadModel(ctx, req)
+
 	conversationContext := &Context{
-		Message:            DescriptionContext,
+		Message:            contextMsg,
 		CreatedAtTimestamp: time.Now().Unix(),
 	}
 
@@ -607,7 +699,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 		Messages: []ConversationMessage{
 			{
 				Role:      RoleUser,
-				Text:      w.WineTextualSummaryStr(),
+				Text:      message,
 				CreatedAt: time.Now().Unix(),
 			},
 		},
@@ -624,13 +716,18 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 	reqsr.WithPOST()
 	reqsr.WithInput(requestData)
 
+	usageStats.Input = utils.ConvToStr(requestData)
+
 	err := reqsr.Request(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	monitoring.Usage(ctx).SetGenPromptTokens(chatResp.Usage.PromptTokens)
-	monitoring.Usage(ctx).SetGenCompletionTokens(chatResp.Usage.CompletionTokens)
+	usageStats.InputPromptTokens = chatResp.Usage.PromptTokens
+	usageStats.InputCompletionTokens = chatResp.Usage.CompletionTokens
+	usageStats.GPTModel = model.GetName()
+	usageStats.SessionEnd = time.Now().UTC()
+	usageStats.Save(ctx, h.dbConn)
 
 	respMessage := ""
 	for i := range chatResp.Choices {
@@ -641,12 +738,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 
 		respMessage = choice.Message.Content
 	}
-
-	if respMessage == "" {
-		respMessage = w.String()
-	} else {
-		respMessage += fmt.Sprintf(" Цена %.f руб", w.Price)
-	}
+	log.Debugf("Generated message by ChatGPT: %q", respMessage)
 
 	return respMessage, nil
 }
