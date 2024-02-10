@@ -127,7 +127,7 @@ func (afh *ListFavoritesHandler) handleSuccessCase(ctx context.Context, req *msg
 		op.WithPredefinedResponse(msg.PredefinedResponse{
 			Text: "❌️ " + "Удалить из избранного",
 			Type: msg.PredefinedResponseInline,
-			Data: "/remove_from_favorites " + w.Wine.Article,
+			Data: DeleteFromFavoritesCommand + " " + w.Wine.Article,
 		})
 		op.WithPredefinedResponse(msg.PredefinedResponse{
 			Text: "⭐ " + "Избранное",
