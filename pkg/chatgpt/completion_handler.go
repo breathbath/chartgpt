@@ -417,8 +417,12 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 
 	if len(messages) == 0 {
 		return &msg.Response{
-			Message: "Didn't get any response from ChatGPT completion API",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "Didn't get any response from ChatGPT completion API",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -428,10 +432,14 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}
 
 	return &msg.Response{
-		Message: strings.Join(messages, "/n"),
-		Type:    msg.Success,
-		Media:   media,
-		Options: options,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: strings.Join(messages, "/n"),
+				Type:    msg.Success,
+				Media:   media,
+				Options: options,
+			},
+		},
 	}, nil
 }
 
@@ -441,7 +449,7 @@ func (h *ChatCompletionHandler) processToolCall(
 	history *[]ConversationMessage,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
-) (responseMessage *msg.Response, err error) {
+) (responseMessage *msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
 
 	if len(choice.Message.ToolCalls) == 0 {
@@ -564,7 +572,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	history *[]ConversationMessage,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
-) (responseMessage *msg.Response, err error) {
+) (responseMessage *msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
 
 	wineFilter, err := h.parseFilter(ctx, arguments)
@@ -584,7 +592,9 @@ func (h *ChatCompletionHandler) callFindWine(
 			CreatedAt: time.Now().Unix(),
 		})
 		recommendStats.Save(ctx, h.dbConn)
-		return &msg.Response{Message: NotFoundMessage}, nil
+		return &msg.ResponseMessage{
+			Message: NotFoundMessage,
+		}, nil
 	}
 
 	log.Debugf("Found wine: %q", wineFromDb.String())
@@ -606,7 +616,7 @@ func (h *ChatCompletionHandler) callFindWine(
 		CreatedAt: time.Now().Unix(),
 	})
 
-	respMessage := &msg.Response{
+	respMessage := &msg.ResponseMessage{
 		Message: text,
 	}
 	if wineFromDb.Photo != "" {
@@ -629,6 +639,12 @@ func (h *ChatCompletionHandler) callFindWine(
 		Type: msg.PredefinedResponseInline,
 		Data: "/add_to_favorites " + wineFromDb.Article,
 	})
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "⭐ " + "Избранное",
+		Type: msg.PredefinedResponseInline,
+		Data: "/list_favorites",
+	})
+
 	respMessage.Options = op
 
 	return respMessage, nil

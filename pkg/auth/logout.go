@@ -35,8 +35,12 @@ func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Resp
 	if user == nil {
 		log.Warnf("user not found, will do nothing")
 		return &msg.Response{
-			Message: "User not found",
-			Type:    msg.Success,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "User not found",
+					Type:    msg.Success,
+				},
+			},
 		}, nil
 	}
 
@@ -48,13 +52,17 @@ func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Resp
 	}
 
 	return &msg.Response{
-		Message: "Logout success",
-		Type:    msg.Success,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: "Logout success",
+				Type:    msg.Success,
+			},
+		},
 	}, nil
 }
 
 func (h *LogoutHandler) GetHelp(context.Context, *msg.Request) help.Result {
 	text := fmt.Sprintf("%s: to logout from the system", h.command)
 
-	return help.Result{Text: text, PredefinedOption: h.command}
+	return help.Result{Text: text}
 }

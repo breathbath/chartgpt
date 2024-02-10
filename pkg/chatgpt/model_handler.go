@@ -98,8 +98,12 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 
 	if modelName == "" {
 		return &msg.Response{
-			Message: "empty model name provided",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "empty model name provided",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -113,8 +117,12 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 	if !isModelSupported {
 		log.Errorf("unsupported model name: %q", modelName)
 		return &msg.Response{
-			Message: fmt.Sprintf("unsupported model name %q", modelName),
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: fmt.Sprintf("unsupported model name %q", modelName),
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -126,8 +134,12 @@ func (smc *SetModelHandler) Handle(ctx context.Context, req *msg.Request) (*msg.
 	log.Debugf("saved current model setting %q", modelName)
 
 	return &msg.Response{
-		Message: fmt.Sprintf("successfully set the current model for all requests to %q", modelName),
-		Type:    msg.Success,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: fmt.Sprintf("successfully set the current model for all requests to %q", modelName),
+				Type:    msg.Success,
+			},
+		},
 	}, nil
 }
 
@@ -210,28 +222,33 @@ func (gmc *GetModelsCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	sort.Strings(modelIDs)
 	for i, modelID := range modelIDs {
 		if strings.HasPrefix(modelID, "gpt-") {
+			buttonNameForModelSelection := modelID
+			if modelID == currentModel.GetName() {
+				modelIDs[i] = "<b>" + modelID + "</b> [current]"
+				buttonNameForModelSelection = "✅ " + modelID
+			}
 			opts.WithPredefinedResponse(msg.PredefinedResponse{
-				Text: fmt.Sprintf("/model %s", modelID),
-				Type: msg.PredefinedResponseOutline,
+				Text: buttonNameForModelSelection,
+				Type: msg.PredefinedResponseInline,
+				Data: fmt.Sprintf("/model %s", modelID),
 			})
-		}
-
-		if modelID == currentModel.GetName() {
-			modelIDs[i] = "<b>" + modelID + "</b> [current]"
 		}
 	}
 
 	return &msg.Response{
-		Message: fmt.Sprintf(`<b>Supported ChatGPT models:</b>
-%s
-`, strings.Join(modelIDs, "\n")),
-		Type:    msg.Success,
-		Options: opts,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: fmt.Sprintf(`<b>Here is the list of supported models:</b>
+%s`, strings.Join(modelIDs, ", ")),
+				Type:    msg.Success,
+				Options: opts,
+			},
+		},
 	}, nil
 }
 
 func (gmc *GetModelsCommand) GetHelp(context.Context, *msg.Request) help.Result {
 	text := fmt.Sprintf("%s: to get the list of supported ChatGPT models", gmc.command)
 
-	return help.Result{Text: text, PredefinedOption: gmc.command}
+	return help.Result{Text: text}
 }

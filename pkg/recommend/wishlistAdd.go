@@ -83,9 +83,13 @@ func (afh *AddToFavoritesHandler) handleErrorCase(ctx context.Context) (*msg.Res
 	log.Debugf("Selected a random message for add to favorites failure : %q", responseMessage)
 
 	return &msg.Response{
-		Message: responseMessage,
-		Type:    msg.Error,
-		Options: &msg.Options{},
+		Messages: []msg.ResponseMessage{
+			{
+				Message: responseMessage,
+				Type:    msg.Error,
+				Options: &msg.Options{},
+			},
+		},
 	}, nil
 }
 
@@ -124,16 +128,24 @@ func (afh *AddToFavoritesHandler) handleSuccessCase(ctx context.Context, req *ms
 		log.Errorf("failed to generate add to favorites response message: %v", err)
 		m := utils.SelectRandomMessage(AddToFavoritesFallbackMessages)
 		return &msg.Response{
-			Message: m,
-			Type:    msg.Success,
-			Options: &msg.Options{},
+			Messages: []msg.ResponseMessage{
+				{
+					Message: m,
+					Type:    msg.Success,
+					Options: &msg.Options{},
+				},
+			},
 		}, nil
 	}
 
 	return &msg.Response{
-		Message: responseMessage,
-		Type:    msg.Success,
-		Options: &msg.Options{},
+		Messages: []msg.ResponseMessage{
+			{
+				Message: responseMessage,
+				Type:    msg.Success,
+				Options: &msg.Options{},
+			},
+		},
 	}, nil
 }
 

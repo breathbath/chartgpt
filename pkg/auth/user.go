@@ -199,8 +199,12 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 	if len(words) < expectedWordsCount {
 		log.Warnf("invalid user data provided: %q", req.Message)
 		return &msg.Response{
-			Message: "Invalid values provided, you need to provide all user details: login, platform and password as space separated values",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "Invalid values provided, you need to provide all user details: login, platform and password as space separated values",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -233,8 +237,12 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 	}
 	if cachedUser != nil && cachedUser.Role == AdminRole {
 		return &msg.Response{
-			Message: "Cannot downgrade user role from admin to user",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "Cannot downgrade user role from admin to user",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -249,9 +257,13 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 	op.WithIsResponseToHiddenMessage()
 
 	return &msg.Response{
-		Message: "successfully added user",
-		Type:    msg.Success,
-		Options: op,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: "successfully added user",
+				Type:    msg.Success,
+				Options: op,
+			},
+		},
 	}, nil
 }
 
@@ -320,8 +332,12 @@ func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 	}
 
 	return &msg.Response{
-		Message: strings.Join(usersRaw, "\n"),
-		Type:    msg.Success,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: strings.Join(usersRaw, "\n"),
+				Type:    msg.Success,
+			},
+		},
 	}, nil
 }
 
@@ -375,8 +391,12 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 	if inputID == "" {
 		log.Warnf("no user id provided in %q", req.Message)
 		return &msg.Response{
-			Message: "no user id provided",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "no user id provided",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -398,14 +418,22 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 		}
 
 		return &msg.Response{
-			Message: fmt.Sprintf("successfully deleted user %q", inputID),
-			Type:    msg.Success,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: fmt.Sprintf("successfully deleted user %q", inputID),
+					Type:    msg.Success,
+				},
+			},
 		}, nil
 	}
 
 	return &msg.Response{
-		Message: fmt.Sprintf("didn't find user by %q", inputID),
-		Type:    msg.Error,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: fmt.Sprintf("didn't find user by %q", inputID),
+				Type:    msg.Error,
+			},
+		},
 	}, nil
 }
 

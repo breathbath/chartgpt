@@ -72,8 +72,12 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	conversationContextText := utils.ExtractCommandValue(req.Message, sc.command)
 	if conversationContextText == "" {
 		return &msg.Response{
-			Message: "empty conversation context provided",
-			Type:    msg.Error,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "empty conversation context provided",
+					Type:    msg.Error,
+				},
+			},
 		}, nil
 	}
 
@@ -89,8 +93,12 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 			return nil, err
 		}
 		return &msg.Response{
-			Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
-			Type:    msg.Success,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
+					Type:    msg.Success,
+				},
+			},
 		}, nil
 	}
 
@@ -120,16 +128,20 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	}
 
 	log.Debugf("Saved conversation context: %q", conversationContext)
+
 	return &msg.Response{
-		Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
-		Type:    msg.Success,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
+				Type:    msg.Success,
+			},
+		},
 	}, nil
 }
 
 func (sc *SetConversationContextHandler) GetHelp(context.Context, *msg.Request) help.Result {
 	text := fmt.Sprintf(
-		"%s #text#: to set context for the current conversation (see setting system role message "+
-			"https://platform.openai.com/docs/guides/chat/introduction)",
+		"%s #text#: to set context for the current conversation (see setting system role message ",
 		sc.command,
 	)
 
@@ -185,22 +197,31 @@ func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request
 		if err != nil {
 			return nil, err
 		}
+
 		return &msg.Response{
-			Message: "Successfully reset your current conversation",
-			Type:    msg.Success,
+			Messages: []msg.ResponseMessage{
+				{
+					Message: "Successfully reset your current conversation",
+					Type:    msg.Success,
+				},
+			},
 		}, nil
 	}
 
 	log.Debug("successfully reset conversation")
 
 	return &msg.Response{
-		Message: "Successfully reset your current conversation",
-		Type:    msg.Success,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: "Successfully reset your current conversation",
+				Type:    msg.Success,
+			},
+		},
 	}, nil
 }
 
 func (sc *ResetConversationHandler) GetHelp(context.Context, *msg.Request) help.Result {
 	text := fmt.Sprintf("%s: to reset your conversation", sc.command)
 
-	return help.Result{Text: text, PredefinedOption: sc.command}
+	return help.Result{Text: text}
 }

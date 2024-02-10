@@ -15,7 +15,9 @@ func (sh *StartHandler) CanHandle(_ context.Context, req *msg.Request) (bool, er
 
 func (sh *StartHandler) Handle(context.Context, *msg.Request) (*msg.Response, error) {
 	return &msg.Response{
-		Message: `Как пользоваться ботом: 
+		Messages: []msg.ResponseMessage{
+			{
+				Message: `Как пользоваться ботом: 
 
 1️⃣Отправьте голосовое сообщение: спросите у бота какое вино вам подойдет 
 
@@ -39,6 +41,8 @@ func (sh *StartHandler) Handle(context.Context, *msg.Request) (*msg.Response, er
 
 4️⃣Наслаждайтесь вкусом 😊
 `,
-		Type: msg.Success,
+				Type: msg.Success,
+			},
+		},
 	}, nil
 }

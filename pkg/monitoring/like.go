@@ -61,9 +61,13 @@ func (lh *LikeHandler) handleErrorCase(ctx context.Context) (*msg.Response, erro
 	log.Debugf("Selected a random like thank you response: %q", responseMessage)
 
 	return &msg.Response{
-		Message: responseMessage,
-		Type:    msg.Success,
-		Options: &msg.Options{},
+		Messages: []msg.ResponseMessage{
+			{
+				Message: responseMessage,
+				Type:    msg.Success,
+				Options: &msg.Options{},
+			},
+		},
 	}, nil
 }
 
@@ -123,8 +127,12 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	}
 
 	return &msg.Response{
-		Message: responseMessage,
-		Type:    msg.Success,
-		Options: &msg.Options{},
+		Messages: []msg.ResponseMessage{
+			{
+				Message: responseMessage,
+				Type:    msg.Success,
+				Options: &msg.Options{},
+			},
+		},
 	}, nil
 }

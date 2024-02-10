@@ -67,11 +67,15 @@ const (
 	Error
 )
 
-type Response struct {
+type ResponseMessage struct {
 	Message string
 	Type    Type
 	Options *Options
 	Media   *Media
+}
+
+type Response struct {
+	Messages []ResponseMessage
 }
 
 const MediaTypeImage = "image"

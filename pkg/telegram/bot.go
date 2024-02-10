@@ -112,7 +112,7 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 	return req, nil
 }
 
-func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
+func (b *Bot) guessParseMode(resp *msg.ResponseMessage) telebot.ParseMode {
 	switch resp.Options.GetFormat() {
 	case msg.OutputFormatMarkdown1:
 		return telebot.ModeMarkdown
@@ -130,7 +130,7 @@ func (b *Bot) guessParseMode(resp *msg.Response) telebot.ParseMode {
 func (b *Bot) sendMessageSuccess(
 	ctx context.Context,
 	telegramMsg telebot.Context,
-	resp *msg.Response,
+	resp *msg.ResponseMessage,
 	senderOpts *telebot.SendOptions,
 ) error {
 	log := logrus.WithContext(ctx)
@@ -175,7 +175,7 @@ func (b *Bot) sendMessageSuccess(
 func (b *Bot) sendMedia(
 	ctx context.Context,
 	telegramMsg telebot.Context,
-	resp *msg.Response,
+	resp *msg.ResponseMessage,
 	senderOpts *telebot.SendOptions,
 ) error {
 	log := logrus.WithContext(ctx)
@@ -223,7 +223,7 @@ func (b *Bot) sendMedia(
 func (b *Bot) processResponseMessage(
 	ctx context.Context,
 	telegramMsg telebot.Context,
-	resp *msg.Response,
+	resp *msg.ResponseMessage,
 ) error {
 	log := logrus.WithContext(ctx)
 
@@ -242,42 +242,33 @@ func (b *Bot) processResponseMessage(
 
 	replyButtonsGroups := [][]telebot.ReplyButton{}
 	inlineButtonGroups := [][]telebot.InlineButton{}
-	for i, predefinedResp := range resp.Options.GetPredefinedResponses() {
-		if predefinedResp.Text == "" {
-			continue
-		}
-		if predefinedResp.Type == msg.PredefinedResponseInline {
-			if len(inlineButtonGroups) == 0 {
-				inlineButtonGroups = append(inlineButtonGroups, []telebot.InlineButton{})
-			}
-			inlineButtonGroups[0] = append(inlineButtonGroups[0], telebot.InlineButton{
-				Text: predefinedResp.Text,
-				Data: predefinedResp.Data,
-			})
-			continue
-		}
+	replyButtonsGroup := []telebot.ReplyButton{}
+	inlineButtonGroup := []telebot.InlineButton{}
 
-		if i%3 == 0 {
-			if predefinedResp.Type == msg.PredefinedResponseInline {
-				inlineButtonGroups = append(inlineButtonGroups, []telebot.InlineButton{})
-			} else {
-				replyButtonsGroups = append(replyButtonsGroups, []telebot.ReplyButton{})
-			}
-		}
-
+	for _, predefinedResp := range resp.Options.GetPredefinedResponses() {
 		if predefinedResp.Type == msg.PredefinedResponseInline {
-			lastGroupIndex := len(inlineButtonGroups) - 1
-			inlineButtonGroups[lastGroupIndex] = append(
-				inlineButtonGroups[lastGroupIndex],
-				telebot.InlineButton{Text: predefinedResp.Text},
-			)
+			inlineButtonGroup = append(inlineButtonGroup, telebot.InlineButton{Text: predefinedResp.Text, Data: predefinedResp.Data})
 		} else {
-			lastGroupIndex := len(replyButtonsGroups) - 1
-			replyButtonsGroups[lastGroupIndex] = append(
-				replyButtonsGroups[lastGroupIndex],
-				telebot.ReplyButton{Text: predefinedResp.Text},
-			)
+			replyButtonsGroup = append(replyButtonsGroup, telebot.ReplyButton{Text: predefinedResp.Text})
 		}
+
+		if len(inlineButtonGroup) == 3 {
+			inlineButtonGroups = append(inlineButtonGroups, inlineButtonGroup)
+			inlineButtonGroup = []telebot.InlineButton{}
+		}
+
+		if len(replyButtonsGroup) == 3 {
+			replyButtonsGroups = append(replyButtonsGroups, replyButtonsGroup)
+			replyButtonsGroup = []telebot.ReplyButton{}
+		}
+	}
+
+	if len(inlineButtonGroup) > 0 {
+		inlineButtonGroups = append(inlineButtonGroups, inlineButtonGroup)
+	}
+
+	if len(replyButtonsGroup) > 0 {
+		replyButtonsGroups = append(replyButtonsGroups, replyButtonsGroup)
 	}
 
 	if len(replyButtonsGroups) > 0 {
@@ -293,6 +284,7 @@ func (b *Bot) processResponseMessage(
 		rm := &telebot.ReplyMarkup{
 			OneTimeKeyboard: resp.Options.IsTempPredefinedResponse(),
 			InlineKeyboard:  inlineButtonGroups,
+			ResizeKeyboard:  true,
 		}
 		senderOpts.ReplyMarkup = rm
 	}
@@ -340,9 +332,11 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 		return err
 	}
 
-	err = b.processResponseMessage(ctx, telegramContext, resp)
-	if err != nil {
-		return err
+	for _, respMsg := range resp.Messages {
+		err = b.processResponseMessage(ctx, telegramContext, &respMsg)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

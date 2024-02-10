@@ -9,7 +9,10 @@ import (
 )
 
 type Result struct {
-	Text, PredefinedOption string
+	Text                 string
+	PredefinedOptionText string
+	PredefinedOptionData string
+	PredefinedOptionType string
 }
 
 const helpCommand = "/help"
@@ -46,10 +49,6 @@ func (ch *Handler) CanHandle(_ context.Context, req *msg.Request) (bool, error) 
 
 func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	op := &msg.Options{}
-	op.WithPredefinedResponse(msg.PredefinedResponse{
-		Text: helpCommand,
-		Type: msg.PredefinedResponseOutline,
-	})
 
 	help := fmt.Sprintf(`List of available commands
 
@@ -58,8 +57,14 @@ func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response,
 	for _, prov := range ch.Providers {
 		helpResult := prov.GetHelp(ctx, req)
 
-		if helpResult.PredefinedOption != "" {
-			op.WithPredefinedResponse(msg.PredefinedResponse{Text: helpResult.PredefinedOption, Type: msg.PredefinedResponseInline})
+		if helpResult.PredefinedOptionText != "" {
+			op.WithPredefinedResponse(
+				msg.PredefinedResponse{
+					Text: helpResult.PredefinedOptionText,
+					Type: helpResult.PredefinedOptionType,
+					Data: helpResult.PredefinedOptionData,
+				},
+			)
 		}
 
 		if helpResult.Text == "" {
@@ -71,8 +76,12 @@ func (ch *Handler) Handle(ctx context.Context, req *msg.Request) (*msg.Response,
 	help += "\n"
 
 	return &msg.Response{
-		Message: help,
-		Type:    msg.Success,
-		Options: op,
+		Messages: []msg.ResponseMessage{
+			{
+				Message: help,
+				Type:    msg.Success,
+				Options: op,
+			},
+		},
 	}, nil
 }

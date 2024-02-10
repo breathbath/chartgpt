@@ -157,7 +157,7 @@ func (w Wine) SummaryStr() string {
 
 type WineFavorite struct {
 	gorm.Model
+	UserLogin string
 	WineID    int
 	Wine      Wine `gorm:"constraint:OnDelete:CASCADE;"`
-	UserLogin string
 }
