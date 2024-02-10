@@ -6,6 +6,7 @@ import (
 	"breathbathChatGPT/pkg/utils"
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"strings"
@@ -15,6 +16,14 @@ const AddToFavoritesCommand = "/add_to_favorites"
 const AddToFavoritesContextMessage = `Сообщи об успешном сохранении вина в избранном через нашего электронного сомелье WineChefBot. 
 Дай короткий емкий эмоциональный текст, обращайся на вы. 
 Сообщи, что юзер может показать избранное через текстовое сообщение.`
+
+var AddToFavoritesFallbackMessages = []string{
+	"Поздравляю! Ваше вино успешно сохранено в избранном. Отличный выбор! Теперь вы можете легко показать свои избранные вина через текстовое сообщение. Просто спросите меня о них!",
+	"Ура! Ваше вино сохранено в избранном с помощью нашего электронного сомелье WineChefBot! Отличное решение! Теперь вы можете в любой момент показать свои избранные вина просто написав мне. Я всегда готов поделиться вашими лучшими находками!",
+	"Молодец! Ты успешно сохранил своё любимое вино через нашего электронного сомелье WineChefBot. Теперь ты можешь легко поделиться своим избранным вином с помощью текстового сообщения. Показывай всем, что у тебя отличный вкус!",
+	"Отлично! Ваше вино успешно добавлено в избранное с помощью нашего электронного сомелье WineChefBot. Это прекрасный выбор! Теперь вы можете показать свои избранные вина всего лишь одним текстовым сообщением. Гордитесь своими предпочтениями и делитесь ими с другими!",
+	"Поздравляю! Ваше вино успешно сохранено в избранном с помощью WineChefBot. Вы сделали отличный выбор! Теперь вы можете без труда представить свои избранные вина всего одним текстовым сообщением. Так что не стесняйтесь показать свою коллекцию и поделиться своими винными находками!",
+}
 
 var AddToFavoritesErrorMessages = []string{
 	"Извините, возникла техническая ошибка, и мы не можем добавить это вино в ваш избранный список. Пожалуйста, попробуйте позже.",
@@ -41,7 +50,7 @@ type ResponseGenerator interface {
 	GenerateResponse(
 		ctx context.Context,
 		contextMsg,
-		message string,
+		message, typ string,
 		req *msg.Request,
 	) (string, error)
 }
@@ -80,31 +89,12 @@ func (afh *AddToFavoritesHandler) handleErrorCase(ctx context.Context) (*msg.Res
 	}, nil
 }
 
-func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+func (afh *AddToFavoritesHandler) handleSuccessCase(ctx context.Context, req *msg.Request, w *Wine) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
-	log.Debugf("Will handle add to favorites for message %q", req.Message)
 
-	trackingID := utils.ExtractCommandValue(req.Message, AddToFavoritesCommand)
-	usr := auth.GetUserFromReq(req)
-	if usr == nil {
-		log.Error("Failed to find user data in the current request")
-		return afh.handleErrorCase(ctx)
-	}
+	responseMessage := utils.SelectRandomMessage(AddToFavoritesErrorMessages)
 
-	log.Debugf("Going to find a favorite wine  %q and user %q", trackingID, usr.Login)
-	var result Recommendation
-	res := afh.db.Where("tracking_id = ?", trackingID).Where("user_id = ?", usr.Login).First(&result)
-	if err := res.Error; err != nil {
-		log.Errorf("failed to query recommendation: %v", err)
-		return afh.handleErrorCase(ctx)
-	}
-
-	res = afh.db.Model(&result).Update("likes_count", result.LikesCount+1)
-	if res.Error != nil {
-		log.Errorf("failed to save like for a recommendation: %v", res.Error)
-	} else {
-		log.Debugf("Saved a like for recommendation %d", result.ID)
-	}
+	log.Debugf("Selected a random message for add to favorites failure : %q", responseMessage)
 
 	userFields := []string{}
 	responseFields := []string{}
@@ -119,19 +109,25 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		responseFields = append(responseFields, strings.Join(userFields, ", "))
 	}
 
-	if result.RecommendedWineSummary != "" {
-		responseFields = append(responseFields, fmt.Sprintf("Рекомендованное вино: %s", result.RecommendedWineSummary))
+	if w.WineTextualSummaryStr() != "" {
+		responseFields = append(responseFields, fmt.Sprintf("Рекомендованное вино: %s", w.WineTextualSummaryStr()))
 	}
 
 	responseMessage, err := afh.respGen.GenerateResponse(
 		ctx,
-		LikeContextMessage,
+		AddToFavoritesContextMessage,
 		strings.Join(responseFields, "."),
+		"add_favorites_response",
 		req,
 	)
 	if err != nil {
-		log.Errorf("failed to generate like response message: %v", err)
-		return afh.handleErrorCase(ctx)
+		log.Errorf("failed to generate add to favorites response message: %v", err)
+		m := utils.SelectRandomMessage(AddToFavoritesFallbackMessages)
+		return &msg.Response{
+			Message: m,
+			Type:    msg.Success,
+			Options: &msg.Options{},
+		}, nil
 	}
 
 	return &msg.Response{
@@ -139,4 +135,53 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		Type:    msg.Success,
 		Options: &msg.Options{},
 	}, nil
+}
+
+func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+	log := logrus.WithContext(ctx)
+	log.Debugf("Will handle add to favorites for message %q", req.Message)
+
+	wineArticle := utils.ExtractCommandValue(req.Message, AddToFavoritesCommand)
+	usr := auth.GetUserFromReq(req)
+	if usr == nil {
+		log.Error("Failed to find user data in the current request")
+		return afh.handleErrorCase(ctx)
+	}
+
+	log.Debugf("Going to find a wine by article %q", wineArticle)
+	var wineFromDb Wine
+	res := afh.db.Where("article = ?", wineArticle).First(&wineFromDb)
+	if err := res.Error; err != nil {
+		log.Errorf("failed to find wine by article %q: %v", wineArticle, err)
+		return afh.handleErrorCase(ctx)
+	}
+
+	log.Debugf("Going to find a favorite wine %d and user %q", wineFromDb.ID, usr.Login)
+	var wineFavorite WineFavorite
+	res = afh.db.Where("wine_id = ?", wineFromDb.ID).Where("user_login = ?", usr.Login).First(&wineFavorite)
+
+	if res.Error == nil {
+		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, usr.Login, wineFavorite.ID)
+		return afh.handleSuccessCase(ctx, req, &wineFromDb)
+	}
+	if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		log.Errorf("failed to find a wine favorite: %v", res.Error)
+		return afh.handleErrorCase(ctx)
+	}
+
+	log.Debugf("Didn't find a favorite for wine %d, user %s, id %d, will create a new one", wineFromDb.ID, usr.Login, wineFavorite.ID)
+
+	wineFavorite = WineFavorite{
+		Wine:      wineFromDb,
+		UserLogin: usr.Login,
+	}
+	result := afh.db.Create(&wineFavorite)
+	if err := result.Error; err != nil {
+		log.Errorf("failed to create a wine favorite %q: %v", wineArticle, err)
+		return afh.handleErrorCase(ctx)
+	}
+
+	log.Debugf("Created a wine favorite %d for wine %d, user %s, will create a new one", wineFavorite.ID, wineFromDb.ID, usr.Login)
+
+	return afh.handleSuccessCase(ctx, req, &wineFromDb)
 }
