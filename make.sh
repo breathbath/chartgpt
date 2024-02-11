@@ -25,7 +25,6 @@ tag() {
     image_tag=$(cat VERSION)
     cur_branch=$(git rev-parse --abbrev-ref HEAD)
     git tag -f $image_tag $cur_branch
-    git tag -f $image_tag master
     git push origin $image_tag -f
 }
 

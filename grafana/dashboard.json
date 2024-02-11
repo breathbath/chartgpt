@@ -110,7 +110,7 @@
           "format": "table",
           "hide": false,
           "rawQuery": true,
-          "rawSql": "SELECT\n  SUM(input_completion_tokens) AS \"completion\",\n  SUM(input_prompt_tokens) AS \"prompt\",\n   SUM(input_completion_tokens + gen_prompt_tokens + input_prompt_tokens) AS \"total\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time\nLIMIT\n  50",
+          "rawSql": "SELECT\n  SUM(input_completion_tokens) AS \"completion\",\n  SUM(input_prompt_tokens) AS \"prompt\",\n   SUM(input_completion_tokens + input_prompt_tokens) AS \"total\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time\nLIMIT\n  50",
           "refId": "B",
           "sql": {
             "columns": [
