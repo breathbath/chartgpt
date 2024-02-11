@@ -14,7 +14,9 @@ import (
 
 const DeleteFromFavoritesCommand = "/delete_from_favorites"
 const DeleteFromFavoritesContextMessage = `Сообщи об успешном удалении вина из избранного через нашего электронного сомелье WineChefBot. 
-Дай короткий емкий эмоциональный текст, обращайся на вы.`
+Дай короткий емкий эмоциональный текст, обращайся на вы. Не нужно здороваться.`
+const AlreadyDeletedFromFavoritesContextMessage = `Сообщи что вино уже удалено из избранного через нашего электронного сомелье WineChefBot. 
+Дай короткий емкий эмоциональный текст, обращайся на вы. Не нужно здороваться.`
 
 var DeleteFromFavoritesFallbackMessages = []string{
 	"Рад сообщить, что успешно удалили вино из избранного через нашего электронного сомелье WineChefBot! Теперь ваш список избранных вин стал ещё лучше и отражает только самые изысканные и восхитительные вина. Продолжайте наслаждаться искусством виноделия с нами!",
@@ -72,12 +74,13 @@ func (afh *DeleteFromFavoritesHandler) handleErrorCase(ctx context.Context) (*ms
 	}, nil
 }
 
-func (afh *DeleteFromFavoritesHandler) handleSuccessCase(ctx context.Context, req *msg.Request, w *Wine) (*msg.Response, error) {
+func (afh *DeleteFromFavoritesHandler) handleSuccessCase(
+	ctx context.Context,
+	req *msg.Request,
+	w *Wine,
+	alreadyDeleted bool,
+) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
-
-	responseMessage := utils.SelectRandomMessage(DeleteFromFavoritesErrorMessages)
-
-	log.Debugf("Selected a random message for add to favorites failure : %q", responseMessage)
 
 	userFields := []string{}
 	responseFields := []string{}
@@ -92,13 +95,18 @@ func (afh *DeleteFromFavoritesHandler) handleSuccessCase(ctx context.Context, re
 		responseFields = append(responseFields, strings.Join(userFields, ", "))
 	}
 
-	if w.WineTextualSummaryStr() != "" {
+	if !alreadyDeleted && w.WineTextualSummaryStr() != "" {
 		responseFields = append(responseFields, fmt.Sprintf("Рекомендованное вино: %s", w.WineTextualSummaryStr()))
+	}
+
+	successMsg := DeleteFromFavoritesContextMessage
+	if alreadyDeleted {
+		successMsg = AlreadyDeletedFromFavoritesContextMessage
 	}
 
 	responseMessage, err := afh.respGen.GenerateResponse(
 		ctx,
-		DeleteFromFavoritesContextMessage,
+		successMsg,
 		strings.Join(responseFields, "."),
 		"delete_from_favorites_response",
 		req,
@@ -161,7 +169,7 @@ func (afh *DeleteFromFavoritesHandler) Handle(ctx context.Context, req *msg.Requ
 
 		log.Debugf("Deleted a wine favorite %d for wine %d, user %s", wineFavorite.ID, wineFromDb.ID, usr.Login)
 
-		return afh.handleSuccessCase(ctx, req, &wineFromDb)
+		return afh.handleSuccessCase(ctx, req, &wineFromDb, false)
 	}
 
 	if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -169,5 +177,5 @@ func (afh *DeleteFromFavoritesHandler) Handle(ctx context.Context, req *msg.Requ
 		return afh.handleErrorCase(ctx)
 	}
 
-	return afh.handleSuccessCase(ctx, req, &wineFromDb)
+	return afh.handleSuccessCase(ctx, req, &wineFromDb, true)
 }

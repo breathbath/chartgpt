@@ -119,7 +119,13 @@ func (afh *ListFavoritesHandler) handleSuccessCase(ctx context.Context, req *msg
 	}
 
 	resp := msg.Response{
-		Messages: make([]msg.ResponseMessage, 0),
+		Messages: []msg.ResponseMessage{
+			{
+				Message: "🍷🍷🍷🍷 ----- ИЗБРАННОЕ ----- 🍷🍷🍷🍷",
+				Type:    msg.Success,
+				Options: &msg.Options{},
+			},
+		},
 	}
 
 	for _, w := range favWines {

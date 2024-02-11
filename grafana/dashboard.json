@@ -110,7 +110,7 @@
           "format": "table",
           "hide": false,
           "rawQuery": true,
-          "rawSql": "SELECT\n  SUM(gen_completion_tokens + input_completion_tokens) AS \"completion\",\n  SUM(gen_prompt_tokens + input_prompt_tokens) AS \"prompt\",\n   SUM(gen_completion_tokens + input_completion_tokens + gen_prompt_tokens + input_prompt_tokens) AS \"total\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time\nLIMIT\n  50",
+          "rawSql": "SELECT\n  SUM(input_completion_tokens) AS \"completion\",\n  SUM(input_prompt_tokens) AS \"prompt\",\n   SUM(input_completion_tokens + gen_prompt_tokens + input_prompt_tokens) AS \"total\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time\nLIMIT\n  50",
           "refId": "B",
           "sql": {
             "columns": [
@@ -193,7 +193,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  SUM(gen_completion_tokens + input_completion_tokens) AS \"completion\",\n  SUM(gen_prompt_tokens + input_prompt_tokens) AS \"prompt\",\n   SUM(gen_completion_tokens + input_completion_tokens + gen_prompt_tokens + input_prompt_tokens) AS \"total\"\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)",
+          "rawSql": "SELECT\n  SUM(input_completion_tokens) AS \"completion\",\n  SUM(input_prompt_tokens) AS \"prompt\",\n   SUM(input_completion_tokens + input_prompt_tokens) AS \"total\"\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)",
           "refId": "A",
           "sql": {
             "columns": [
@@ -604,7 +604,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  user_id 'user id',\n  (input_prompt_tokens + input_completion_tokens + gen_completion_tokens + gen_prompt_tokens) 'toal tokens',\n  is_voice_input 'is voice',\n  input 'prompt', TIMESTAMPDIFF(SECOND, session_start, session_end) AS 'duration seconds',\n  input_prompt_tokens 'prompt tokens',\n  input_completion_tokens 'compl tokens',\n  gen_completion_tokens 'reco completion tokens',\n  gen_prompt_tokens 'reco prompt tokens',\n    session_start as 'started',\n    session_end as 'end',\n  gpt_model 'model'\nFROM\n  wine.usage_stats\nWHERE \n  $__timeFilter(session_start)\nORDER BY session_start DESC\nLIMIT\n  50",
+          "rawSql": "SELECT\n  user_id 'user id',\n  (input_prompt_tokens + input_completion_tokens) 'total tokens', `type` 'type', input 'prompt', TIMESTAMPDIFF(SECOND, session_start, session_end) AS 'duration seconds',\n  input_prompt_tokens 'prompt tokens',\n  input_completion_tokens 'compl tokens',\n    session_start as 'started',\n    session_end as 'end',\n  gpt_model 'model'\nFROM\n  wine.usage_stats\nWHERE \n  $__timeFilter(session_start)\nORDER BY session_start DESC\nLIMIT\n  50",
           "refId": "A",
           "sql": {
             "columns": [

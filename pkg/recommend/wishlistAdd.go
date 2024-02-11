@@ -14,8 +14,9 @@ import (
 
 const AddToFavoritesCommand = "/add_to_favorites"
 const AddToFavoritesContextMessage = `Сообщи об успешном сохранении вина в избранном через нашего электронного сомелье WineChefBot. 
-Дай короткий емкий эмоциональный текст, обращайся на вы. 
-Сообщи, что юзер может показать избранное через текстовое сообщение.`
+Дай короткий емкий эмоциональный текст, обращайся на вы. Сообщи, что юзер может показать избранное нажав кнопку "Избранное". Не нужно здороваться.`
+const AlreadyExistsInFavoritesContextMessage = `Сообщи, что выбранное вино уже находится в избранном через нашего электронного сомелье WineChefBot. 
+Дай короткий емкий эмоциональный текст. Не нужно здороваться.`
 
 var AddToFavoritesFallbackMessages = []string{
 	"Поздравляю! Ваше вино успешно сохранено в избранном. Отличный выбор! Теперь вы можете легко показать свои избранные вина через текстовое сообщение. Просто спросите меня о них!",
@@ -93,12 +94,12 @@ func (afh *AddToFavoritesHandler) handleErrorCase(ctx context.Context) (*msg.Res
 	}, nil
 }
 
-func (afh *AddToFavoritesHandler) handleSuccessCase(ctx context.Context, req *msg.Request, w *Wine) (*msg.Response, error) {
+func (afh *AddToFavoritesHandler) handleSuccessCase(
+	ctx context.Context,
+	req *msg.Request, w *Wine,
+	alreadyExist bool,
+) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
-
-	responseMessage := utils.SelectRandomMessage(AddToFavoritesErrorMessages)
-
-	log.Debugf("Selected a random message for add to favorites failure : %q", responseMessage)
 
 	userFields := []string{}
 	responseFields := []string{}
@@ -113,13 +114,17 @@ func (afh *AddToFavoritesHandler) handleSuccessCase(ctx context.Context, req *ms
 		responseFields = append(responseFields, strings.Join(userFields, ", "))
 	}
 
-	if w.WineTextualSummaryStr() != "" {
+	if !alreadyExist && w.WineTextualSummaryStr() != "" {
 		responseFields = append(responseFields, fmt.Sprintf("Рекомендованное вино: %s", w.WineTextualSummaryStr()))
 	}
 
+	successMsg := AddToFavoritesContextMessage
+	if alreadyExist {
+		successMsg = AlreadyExistsInFavoritesContextMessage
+	}
 	responseMessage, err := afh.respGen.GenerateResponse(
 		ctx,
-		AddToFavoritesContextMessage,
+		successMsg,
 		strings.Join(responseFields, "."),
 		"add_favorites_response",
 		req,
@@ -174,7 +179,7 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 
 	if res.Error == nil {
 		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, usr.Login, wineFavorite.ID)
-		return afh.handleSuccessCase(ctx, req, &wineFromDb)
+		return afh.handleSuccessCase(ctx, req, &wineFromDb, true)
 	}
 	if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		log.Errorf("failed to find a wine favorite: %v", res.Error)
@@ -195,5 +200,5 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 
 	log.Debugf("Created a wine favorite %d for wine %d, user %s, will create a new one", wineFavorite.ID, wineFromDb.ID, usr.Login)
 
-	return afh.handleSuccessCase(ctx, req, &wineFromDb)
+	return afh.handleSuccessCase(ctx, req, &wineFromDb, false)
 }
