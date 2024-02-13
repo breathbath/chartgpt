@@ -11,7 +11,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Router, error) {
+func BuildMessageRouter(
+	cacheClient storage.Client,
+	dbConn *gorm.DB,
+) (*msg.Router, error) {
 	us := auth.NewUserStorage(cacheClient)
 
 	userMiddleware := auth.NewUserMiddleware(us)

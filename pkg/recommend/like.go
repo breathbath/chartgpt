@@ -6,14 +6,15 @@ import (
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"strings"
 )
 
 const LikeCommand = "/like"
-const LikeContextMessage = "Поблагодари нашего пользователя за лайк который он поставил вину через нашего электронного сомелье WineChefBot. Дай короткий емкий эмоциональный текст, обращайся на вы."
+const DisLikeCommand = "/dislike"
+const LikeContextMessage = "Поблагодари нашего пользователя за оценку нашего электронного сомелье WineChefBot. Дай короткий емкий эмоциональный текст и учитывай поставленную оценку."
 
 var FallbackResponseMessages = []string{
 	"Супер, спасибо за лайк нашей системе рекомендаций вин! Это круто, что тебе понравилось. Мы старались сделать ее полезной и интересной, и твой лайк подтверждает, что у нас получилось! Очень ценим твою поддержку и благодарим тебя за нее. Если у тебя есть еще какие-то предложения или пожелания, дай нам знать. Мы всегда рады помочь в выборе вина и делиться с тобой своими рекомендациями.",
@@ -23,6 +24,15 @@ var FallbackResponseMessages = []string{
 	"Благодарю тебя из глубины души за твой лайк! Твоя поддержка очень важна для нас, и мы ценим каждый твой жест.",
 	"Спасибо, что поддерживаете нас своим лайком! Ваша оценка нашей работы очень важна для нас",
 	"Спасибо, ваша поддержка значит много для нас!",
+}
+
+type Like struct {
+	gorm.Model
+	LikeType         string
+	LikeValue        string
+	UserLogin        string
+	RecommendationID *uint
+	Recommendation   *monitoring.Recommendation `gorm:"constraint:OnDelete:SET NULL;"`
 }
 
 type LikeHandler struct {
@@ -38,7 +48,7 @@ func NewLikeHandler(db *gorm.DB, respGen ResponseGenerator) *LikeHandler {
 }
 
 func (lh *LikeHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
-	if !utils.MatchesCommand(req.Message, LikeCommand) {
+	if !utils.MatchesCommands(req.Message, []string{LikeCommand, DisLikeCommand}) {
 		return false, nil
 	}
 
@@ -67,42 +77,80 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	log := logrus.WithContext(ctx)
 	log.Debugf("Will handle like for message %q", req.Message)
 
-	trackingID := utils.ExtractCommandValue(req.Message, LikeCommand)
+	like := &Like{
+		LikeType: "button_like",
+	}
+
+	userResponseMessages := []string{}
+	recommendationId := ""
+	if utils.MatchesCommand(req.Message, LikeCommand) {
+		like.LikeValue = "like"
+		recommendationId = utils.ExtractCommandValue(req.Message, LikeCommand)
+		userResponseMessages = append(userResponseMessages, "Оценка: понравилось")
+	} else if utils.MatchesCommand(req.Message, DisLikeCommand) {
+		like.LikeValue = "dislike"
+		recommendationId = utils.ExtractCommandValue(req.Message, DisLikeCommand)
+		userResponseMessages = append(userResponseMessages, "Оценка: не понравилось")
+	}
+
 	usr := auth.GetUserFromReq(req)
 	if usr == nil {
 		log.Error("Failed to find user data in the current request")
 		return lh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Going to find recommendation tracking for trackingID %q and user %q", trackingID, usr.Login)
-	var result monitoring.Recommendation
-	res := lh.db.Where("tracking_id = ?", trackingID).Where("user_id = ?", usr.Login).First(&result)
-	if err := res.Error; err != nil {
-		log.Errorf("failed to query recommendation: %v", err)
-		return lh.handleErrorCase(ctx)
+	like.UserLogin = usr.Login
+
+	var reco *monitoring.Recommendation
+
+	if recommendationId != "" {
+		log.Debugf("Going to find recommendation tracking for recommendation %s", recommendationId)
+		reco = &monitoring.Recommendation{}
+		res := lh.db.First(reco, recommendationId)
+		if err := res.Error; err != nil {
+			log.Errorf("failed to query recommendation %s: %v", recommendationId, err)
+		} else {
+			like.Recommendation = reco
+		}
 	}
 
-	userFields := []string{}
-	responseFields := []string{}
 	if req.Sender.FirstName != "" {
-		userFields = append(userFields, "Имя: "+req.Sender.FirstName)
+		userResponseMessages = append(userResponseMessages, "Имя пользователя: "+req.Sender.FirstName)
 	}
 	if req.Sender.LastName != "" {
-		userFields = append(userFields, "Фамилия: "+req.Sender.LastName)
+		userResponseMessages = append(userResponseMessages, "Фамилия: "+req.Sender.LastName)
 	}
 
-	if len(userFields) > 0 {
-		responseFields = append(responseFields, strings.Join(userFields, ", "))
+	query := lh.db.Model(&Like{})
+	lh.db.Where("user_login=?", like.UserLogin)
+	if like.Recommendation != nil {
+		lh.db.Where("recommendation_id=?", like.Recommendation.ID)
 	}
 
-	if result.RecommendedWineSummary != "" {
-		responseFields = append(responseFields, fmt.Sprintf("Рекомендованное вино: %s", result.RecommendedWineSummary))
+	var existingLike Like
+	res := query.Take(&existingLike)
+	if res.Error == nil {
+		if existingLike.LikeValue != like.LikeValue {
+			res := lh.db.Model(&Like{}).Where("id=?", existingLike.ID).Update("like_value", like.LikeValue)
+			if err := res.Error; err != nil {
+				log.Errorf("failed to update like with id %d: %v", existingLike.ID, err)
+			}
+		}
+
+	} else if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		res := lh.db.Create(like)
+		if err := res.Error; err != nil {
+			log.Errorf("failed to save like from user %q: %v", usr.Login, err)
+		}
+
+	} else if res.Error != nil {
+		log.Errorf("failed to find like from user %q: %v", usr.Login, res.Error)
 	}
 
 	responseMessage, err := lh.respGen.GenerateResponse(
 		ctx,
 		LikeContextMessage,
-		strings.Join(responseFields, "."),
+		strings.Join(userResponseMessages, "."),
 		"like_response",
 		req,
 	)

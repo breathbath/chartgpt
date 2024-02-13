@@ -1,5 +1,10 @@
 package msg
 
+import (
+	"context"
+	"time"
+)
+
 type OutputFormat uint
 
 const (
@@ -23,6 +28,11 @@ type PredefinedResponse struct {
 type PredefinedResponseOptions struct {
 	Responses []PredefinedResponse
 	IsTemp    bool
+}
+
+type DelayedOptions struct {
+	Timeout time.Duration
+	Ctx     context.Context
 }
 
 type Options struct {

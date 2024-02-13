@@ -68,10 +68,11 @@ const (
 )
 
 type ResponseMessage struct {
-	Message string
-	Type    Type
-	Options *Options
-	Media   *Media
+	Message        string
+	Type           Type
+	Options        *Options
+	DelayedOptions *DelayedOptions
+	Media          *Media
 }
 
 type Response struct {

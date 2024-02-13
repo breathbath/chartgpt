@@ -26,6 +26,7 @@ func schema(dbConn *gorm.DB) error {
 		monitoring.UsageStats{},
 		monitoring.Recommendation{},
 		recommend.WineFavorite{},
+		recommend.Like{},
 	)
 	if err != nil {
 		return err

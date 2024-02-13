@@ -14,10 +14,11 @@ import (
 )
 
 type Bot struct {
-	conf       *Config
-	baseBot    *telebot.Bot
-	msgHandler *msg.Router
-	dbConn     *gorm.DB
+	conf                 *Config
+	baseBot              *telebot.Bot
+	msgHandler           *msg.Router
+	dbConn               *gorm.DB
+	delayedMessageSender *DelayedMessageSender
 }
 
 func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB) (*Bot, error) {
@@ -36,7 +37,11 @@ func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB) (*Bot, error) {
 		return nil, errors.Wrap(err, "failed to create telegram bot")
 	}
 
-	return &Bot{conf: c, baseBot: botAPI, msgHandler: r, dbConn: dbConn}, nil
+	b := &Bot{conf: c, baseBot: botAPI, msgHandler: r, dbConn: dbConn}
+	delayedMessageSender := NewDelayedMessageSender(b.processResponseMessage)
+	b.delayedMessageSender = delayedMessageSender
+
+	return b, nil
 }
 
 func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) (*msg.Request, error) {
@@ -227,6 +232,25 @@ func (b *Bot) processResponseMessage(
 ) error {
 	log := logrus.WithContext(ctx)
 
+	if resp.DelayedOptions != nil {
+		log.Debugf("Delayed message %q, timeout: %v, sender: %s", resp.Message, resp.DelayedOptions.Timeout, telegramMsg.Sender().Recipient())
+
+		delayedMessage := &msg.ResponseMessage{
+			Message: resp.Message,
+			Type:    resp.Type,
+			Options: resp.Options,
+			Media:   resp.Media,
+		}
+		delayedMessageCtx := DelayedMessageCtx{
+			Ctx:         resp.DelayedOptions.Ctx,
+			Message:     delayedMessage,
+			TelegramCtx: telegramMsg,
+			Timeout:     resp.DelayedOptions.Timeout,
+		}
+		b.delayedMessageSender.Plan(delayedMessageCtx)
+		return nil
+	}
+
 	if resp == nil || (resp.Message == "" && resp.Media == nil) {
 		log.Info("response message is empty, will send nothing to the sender")
 		return nil
@@ -238,7 +262,6 @@ func (b *Bot) processResponseMessage(
 
 	log.Debugf("telegram sender options: %+v", senderOpts)
 	log.Debugf("telegram message:\n%q", resp.Message)
-	log.Debugf("telegram media:\n%+v", resp.Media)
 
 	replyButtonsGroups := [][]telebot.ReplyButton{}
 	inlineButtonGroups := [][]telebot.InlineButton{}
@@ -324,6 +347,9 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 	if err != nil {
 		return err
 	}
+
+	log.Debugf("resetting delayed conversation with %q", telegramContext.Sender().Recipient())
+	b.delayedMessageSender.Reset(telegramContext.Sender().Recipient())
 
 	resp, err := b.msgHandler.Route(ctx, req)
 	if err != nil {

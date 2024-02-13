@@ -3,24 +3,22 @@ package cmd
 import (
 	"breathbathChatGPT/pkg/db"
 	"breathbathChatGPT/pkg/migrate"
+	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/storage"
+	"breathbathChatGPT/pkg/telegram"
+	logging "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
-
-	logging "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-
-	"breathbathChatGPT/pkg/msg"
-	"breathbathChatGPT/pkg/storage"
-	"breathbathChatGPT/pkg/telegram"
 )
 
 var telegramCmd = &cobra.Command{
 	Use:   "telegram",
 	Short: "Starts a Telegram bot",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cacheClient, err := storage.BuildRedisClient()
+		redisClient, err := storage.BuildRedisClient()
 		if err != nil {
 			return err
 		}
@@ -35,7 +33,7 @@ var telegramCmd = &cobra.Command{
 			return err
 		}
 
-		msgRouter, err := BuildMessageRouter(cacheClient, dbConn)
+		msgRouter, err := BuildMessageRouter(redisClient, dbConn)
 		if err != nil {
 			return err
 		}

@@ -133,6 +133,30 @@ func (c *RedisClient) Write(ctx context.Context, key string, raw []byte, exp tim
 	return nil
 }
 
+func (c *RedisClient) Pub(ctx context.Context, channel string, message interface{}) error {
+	err := c.baseClient.Publish(ctx, channel, message).Err()
+	if err != nil {
+		return errors.Wrapf(err, "failed to pub data to redis under channel %q", channel)
+	}
+
+	return nil
+}
+
+func (c *RedisClient) NewSub(ctx context.Context, channel string) *base.PubSub {
+	pubsub := c.baseClient.Subscribe(ctx, channel)
+	return pubsub
+}
+
+func (c *RedisClient) Sub(ctx context.Context, cl *base.PubSub, consumer func(msg string) error) error {
+	ch := cl.Channel()
+
+	for msg := range ch {
+		consumer(msg.Payload)
+	}
+
+	return nil
+}
+
 func (c *RedisClient) Delete(ctx context.Context, key string) error {
 	log := logrus.WithContext(ctx)
 

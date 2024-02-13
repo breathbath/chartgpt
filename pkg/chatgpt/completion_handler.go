@@ -43,6 +43,12 @@ var colors = []string{"Белое", "Розовое", "Красное", "Ора�
 var sugars = []string{"полусладкое", "сухое", "полусухое", "сладкое", "экстра брют", "брют"}
 var bodies = []string{"полнотелое", "неполнотелое"}
 var types = []string{"вино", "игристое", "шампанское", "херес", "портвейн"}
+var botLikeTexts = []string{
+	"Я надеюсь, что тебе понравилось наше общение. Мы очень ценим твоё мнение! Пожалуйста, поставь оценку нашей работе: лайк или дислайк. Буду признателен за твою честную оценку!",
+	"Прости, если отвлек тебя от чего-то важного. Но мне очень интересно узнать твоё мнение! Если у тебя есть возможность, буду благодарен, если ты поставишь оценку. Твоё мнение важно для меня!",
+	"Прости, если путаю тебя своими вопросами. Но мне действительно интересно, что ты думаешь о моих рекомендациях. Пожалуйста, поставь оценку. Заранее благодарим за твоё мнение!",
+	"Hey! Просто хотел напомнить тебе о возможности оценить мою работу. Если у тебя есть 1 секунда свободного времени, пожалуйста, нажми на одну из кнопок ниже. Спасибо большое!",
+}
 
 type ChatCompletionHandler struct {
 	cfg            *Config
@@ -429,15 +435,48 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		log.Error(err)
 	}
 
-	return &msg.Response{
-		Messages: []msg.ResponseMessage{
-			{
-				Message: strings.Join(messages, "/n"),
-				Type:    msg.Success,
-				Media:   media,
-				Options: options,
-			},
+	respMessages := []msg.ResponseMessage{
+		{
+			Message: strings.Join(messages, "/n"),
+			Type:    msg.Success,
+			Media:   media,
+			Options: options,
 		},
+	}
+
+	var userLike recommend.Like
+	res := h.dbConn.First(&userLike, "user_login = ?", req.Sender.GetID())
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			delayedOptions := &msg.Options{}
+			delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+				Text: "❤️ " + "Нравится",
+				Type: msg.PredefinedResponseInline,
+				Data: fmt.Sprintf("%s %d", recommend.LikeCommand, recommendStats.ID),
+			})
+			delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+				Text: "👎️ " + "Не нравится",
+				Type: msg.PredefinedResponseInline,
+				Data: fmt.Sprintf("%s %d", recommend.DisLikeCommand, recommendStats.ID),
+			})
+			respMessages = append(respMessages, msg.ResponseMessage{
+				Message: utils.SelectRandomMessage(botLikeTexts),
+				Type:    msg.Success,
+				Options: delayedOptions,
+				DelayedOptions: &msg.DelayedOptions{
+					Timeout: time.Second * 30,
+					Ctx:     ctx,
+				},
+			})
+		} else if res.Error != nil {
+			log.Errorf("failed to find like from user %q: %v", req.Sender.GetID(), res.Error)
+		}
+	} else {
+		log.Debug("Skipping delayed like message since user already left a like before")
+	}
+
+	return &msg.Response{
+		Messages: respMessages,
 	}, nil
 }
 

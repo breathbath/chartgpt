@@ -32,10 +32,16 @@ func (f *trackingIDFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	trackingIDField, _ := contextValueI.(string)
 	entry.Data["trackingID"] = trackingIDField
+
 	return f.TextFormatter.Format(entry)
 }
 
 func Init() {
 	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetFormatter(&trackingIDFormatter{})
+	logrus.SetFormatter(&trackingIDFormatter{
+		TextFormatter: logrus.TextFormatter{
+			TimestampFormat: "2006-01-02 15:04:05",
+			FullTimestamp:   true,
+		},
+	})
 }
