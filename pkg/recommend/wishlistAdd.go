@@ -166,23 +166,22 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		return afh.handleErrorCase(ctx)
 	}
 	addToFavsParts := strings.Split(addToFavsQuery, " ")
-	wineArticle := addToFavsParts[0]
-	referencedRecommendationTrackingId := ""
+
+	wineID := addToFavsParts[0]
+	var recommend *monitoring.Recommendation
 	if len(addToFavsParts) > 1 {
-		referencedRecommendationTrackingId = addToFavsParts[1]
+		recommend = &monitoring.Recommendation{}
+		res := afh.db.First(recommend, addToFavsParts[1])
+		if err := res.Error; err != nil {
+			log.Errorf("failed to query recommendation: %v", err)
+		}
 	}
 
-	var recommend *monitoring.Recommendation
-	res := afh.db.Where("tracking_id = ?", referencedRecommendationTrackingId).Where("user_id = ?", usr.Login).First(recommend)
-	if err := res.Error; err != nil {
-		log.Errorf("failed to query recommendation: %v", err)
-	}
-	
-	log.Debugf("Going to find a wine by article %q", wineArticle)
+	log.Debugf("Going to find a wine by id %s", wineID)
 	var wineFromDb Wine
-	res = afh.db.Where("article = ?", wineArticle).First(&wineFromDb)
+	res := afh.db.First(&wineFromDb, wineID)
 	if err := res.Error; err != nil {
-		log.Errorf("failed to find wine by article %q: %v", wineArticle, err)
+		log.Errorf("failed to find wine by id %q: %v", wineID, err)
 		return afh.handleErrorCase(ctx)
 	}
 
@@ -208,7 +207,7 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 	}
 	result := afh.db.Create(&wineFavorite)
 	if err := result.Error; err != nil {
-		log.Errorf("failed to create a wine favorite %q: %v", wineArticle, err)
+		log.Errorf("failed to create a wine favorite %q: %v", wineID, err)
 		return afh.handleErrorCase(ctx)
 	}
 

@@ -247,7 +247,10 @@ func (b *Bot) processResponseMessage(
 
 	for _, predefinedResp := range resp.Options.GetPredefinedResponses() {
 		if predefinedResp.Type == msg.PredefinedResponseInline {
-			inlineButtonGroup = append(inlineButtonGroup, telebot.InlineButton{Text: predefinedResp.Text, Data: predefinedResp.Data})
+			inlineButtonGroup = append(inlineButtonGroup, telebot.InlineButton{
+				Text: predefinedResp.Text,
+				Data: predefinedResp.Data,
+			})
 		} else {
 			replyButtonsGroup = append(replyButtonsGroup, telebot.ReplyButton{Text: predefinedResp.Text})
 		}

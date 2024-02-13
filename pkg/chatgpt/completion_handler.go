@@ -1,7 +1,6 @@
 package chatgpt
 
 import (
-	logging2 "breathbathChatGPT/pkg/logging"
 	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/utils"
@@ -636,7 +635,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "📌️ " + "Запомнить",
 		Type: msg.PredefinedResponseInline,
-		Data: h.buildAddToFavoritesQuery(ctx, &wineFromDb),
+		Data: h.buildAddToFavoritesQuery(&wineFromDb, recommendStats),
 	})
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "⭐ " + "Избранное",
@@ -650,19 +649,10 @@ func (h *ChatCompletionHandler) callFindWine(
 }
 
 func (h *ChatCompletionHandler) buildAddToFavoritesQuery(
-	ctx context.Context,
 	wineFromDb *recommend.Wine,
+	recommendStats *monitoring.Recommendation,
 ) string {
-	log := logging.WithContext(ctx)
-	trackingIdI := ctx.Value(logging2.TrackingIDKey)
-	trackingId := ""
-	if trackingIdI != nil {
-		trackingId = trackingIdI.(string)
-	} else {
-		log.Error("failed to find tracking id")
-	}
-
-	return fmt.Sprintf("%s %s %s", recommend.AddToFavoritesCommand, wineFromDb.Article, trackingId)
+	return fmt.Sprintf("%s %d %d", recommend.AddToFavoritesCommand, wineFromDb.ID, recommendStats.ID)
 }
 
 func (h *ChatCompletionHandler) generateWineAnswer(
