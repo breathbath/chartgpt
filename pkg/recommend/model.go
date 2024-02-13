@@ -1,6 +1,7 @@
 package recommend
 
 import (
+	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/utils"
 	"encoding/json"
 	"gorm.io/gorm"
@@ -157,7 +158,9 @@ func (w Wine) SummaryStr() string {
 
 type WineFavorite struct {
 	gorm.Model
-	UserLogin string
-	WineID    int
-	Wine      Wine `gorm:"constraint:OnDelete:CASCADE;"`
+	UserLogin        string
+	WineID           int
+	Wine             Wine `gorm:"constraint:OnDelete:CASCADE;"`
+	RecommendationID *uint
+	Recommendation   *monitoring.Recommendation `gorm:"constraint:OnDelete:SET NULL;"`
 }

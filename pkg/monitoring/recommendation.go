@@ -19,7 +19,6 @@ type Recommendation struct {
 	RecommendationText     string
 	RawModelInput          string
 	RawModelOutput         string
-	LikesCount             int
 }
 
 func (r *Recommendation) SetTrackingID(ctx context.Context) {

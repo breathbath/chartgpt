@@ -1,7 +1,8 @@
-package monitoring
+package recommend
 
 import (
 	"breathbathChatGPT/pkg/auth"
+	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
@@ -22,15 +23,6 @@ var FallbackResponseMessages = []string{
 	"Благодарю тебя из глубины души за твой лайк! Твоя поддержка очень важна для нас, и мы ценим каждый твой жест.",
 	"Спасибо, что поддерживаете нас своим лайком! Ваша оценка нашей работы очень важна для нас",
 	"Спасибо, ваша поддержка значит много для нас!",
-}
-
-type ResponseGenerator interface {
-	GenerateResponse(
-		ctx context.Context,
-		contextMsg,
-		message, typ string,
-		req *msg.Request,
-	) (string, error)
 }
 
 type LikeHandler struct {
@@ -83,18 +75,11 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	}
 
 	log.Debugf("Going to find recommendation tracking for trackingID %q and user %q", trackingID, usr.Login)
-	var result Recommendation
+	var result monitoring.Recommendation
 	res := lh.db.Where("tracking_id = ?", trackingID).Where("user_id = ?", usr.Login).First(&result)
 	if err := res.Error; err != nil {
 		log.Errorf("failed to query recommendation: %v", err)
 		return lh.handleErrorCase(ctx)
-	}
-
-	res = lh.db.Model(&result).Update("likes_count", result.LikesCount+1)
-	if res.Error != nil {
-		log.Errorf("failed to save like for a recommendation: %v", res.Error)
-	} else {
-		log.Debugf("Saved a like for recommendation %d", result.ID)
 	}
 
 	userFields := []string{}

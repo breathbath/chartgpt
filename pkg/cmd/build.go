@@ -4,7 +4,6 @@ import (
 	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/chatgpt"
 	"breathbathChatGPT/pkg/help"
-	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/storage"
@@ -83,7 +82,7 @@ func BuildMessageRouter(cacheClient storage.Client, dbConn *gorm.DB) (*msg.Route
 		logoutHandler,
 	}
 	helpHandler := help.NewHandler(isScopedModeFunc, isAdminDetector, helpProviders)
-	likeHandler := monitoring.NewLikeHandler(dbConn, chatCompletionHandler)
+	likeHandler := recommend.NewLikeHandler(dbConn, chatCompletionHandler)
 	addToFavoritesHandler := recommend.NewAddToFavoritesHandler(dbConn, chatCompletionHandler)
 	listFavorites := recommend.NewListFavoritesHandler(dbConn, chatCompletionHandler)
 	delFromFavorites := recommend.NewDeleteFromFavoritesHandler(dbConn, chatCompletionHandler)

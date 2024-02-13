@@ -628,15 +628,15 @@ func (h *ChatCompletionHandler) callFindWine(
 	}
 
 	op := &msg.Options{}
-	op.WithPredefinedResponse(msg.PredefinedResponse{
-		Text: "❤️ " + "Нравится",
-		Type: msg.PredefinedResponseInline,
-		Data: h.buildLikeQuery(ctx),
-	})
+	//op.WithPredefinedResponse(msg.PredefinedResponse{
+	//	Text: "❤️ " + "Нравится",
+	//	Type: msg.PredefinedResponseInline,
+	//	Data: h.buildLikeQuery(ctx),
+	//})
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "📌️ " + "Запомнить",
 		Type: msg.PredefinedResponseInline,
-		Data: "/add_to_favorites " + wineFromDb.Article,
+		Data: h.buildAddToFavoritesQuery(ctx, &wineFromDb),
 	})
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "⭐ " + "Избранное",
@@ -649,7 +649,10 @@ func (h *ChatCompletionHandler) callFindWine(
 	return respMessage, nil
 }
 
-func (h *ChatCompletionHandler) buildLikeQuery(ctx context.Context) string {
+func (h *ChatCompletionHandler) buildAddToFavoritesQuery(
+	ctx context.Context,
+	wineFromDb *recommend.Wine,
+) string {
 	log := logging.WithContext(ctx)
 	trackingIdI := ctx.Value(logging2.TrackingIDKey)
 	trackingId := ""
@@ -659,7 +662,7 @@ func (h *ChatCompletionHandler) buildLikeQuery(ctx context.Context) string {
 		log.Error("failed to find tracking id")
 	}
 
-	return fmt.Sprintf("%s %s", monitoring.LikeCommand, trackingId)
+	return fmt.Sprintf("%s %s %s", recommend.AddToFavoritesCommand, wineFromDb.Article, trackingId)
 }
 
 func (h *ChatCompletionHandler) generateWineAnswer(

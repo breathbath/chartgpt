@@ -2,6 +2,7 @@ package recommend
 
 import (
 	"breathbathChatGPT/pkg/auth"
+	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
@@ -158,16 +159,28 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 	log := logrus.WithContext(ctx)
 	log.Debugf("Will handle add to favorites for message %q", req.Message)
 
-	wineArticle := utils.ExtractCommandValue(req.Message, AddToFavoritesCommand)
+	addToFavsQuery := utils.ExtractCommandValue(req.Message, AddToFavoritesCommand)
 	usr := auth.GetUserFromReq(req)
 	if usr == nil {
 		log.Error("Failed to find user data in the current request")
 		return afh.handleErrorCase(ctx)
 	}
+	addToFavsParts := strings.Split(addToFavsQuery, " ")
+	wineArticle := addToFavsParts[0]
+	referencedRecommendationTrackingId := ""
+	if len(addToFavsParts) > 1 {
+		referencedRecommendationTrackingId = addToFavsParts[1]
+	}
 
+	var recommend *monitoring.Recommendation
+	res := afh.db.Where("tracking_id = ?", referencedRecommendationTrackingId).Where("user_id = ?", usr.Login).First(recommend)
+	if err := res.Error; err != nil {
+		log.Errorf("failed to query recommendation: %v", err)
+	}
+	
 	log.Debugf("Going to find a wine by article %q", wineArticle)
 	var wineFromDb Wine
-	res := afh.db.Where("article = ?", wineArticle).First(&wineFromDb)
+	res = afh.db.Where("article = ?", wineArticle).First(&wineFromDb)
 	if err := res.Error; err != nil {
 		log.Errorf("failed to find wine by article %q: %v", wineArticle, err)
 		return afh.handleErrorCase(ctx)
@@ -189,8 +202,9 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 	log.Debugf("Didn't find a favorite for wine %d, user %s, id %d, will create a new one", wineFromDb.ID, usr.Login, wineFavorite.ID)
 
 	wineFavorite = WineFavorite{
-		Wine:      wineFromDb,
-		UserLogin: usr.Login,
+		Wine:           wineFromDb,
+		UserLogin:      usr.Login,
+		Recommendation: recommend,
 	}
 	result := afh.db.Create(&wineFavorite)
 	if err := result.Error; err != nil {
