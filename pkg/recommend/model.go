@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gorm.io/gorm"
+	"strings"
 )
 
 type Wine struct {
@@ -89,15 +90,15 @@ type WineFilter struct {
 
 func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 	filterNames := []string{}
-	if wf.Color == "" {
+	if wf.Color == "" && wf.Grape == "" && len(wf.MatchingDishes) == 0 {
 		filterNames = append(filterNames, "цвет")
 	}
 
-	if wf.Country == "" {
+	if wf.Country == "" && wf.Region == "" {
 		filterNames = append(filterNames, "страна")
 	}
 
-	if len(wf.Style) == 0 {
+	if len(wf.Style) == 0 && wf.Grape == "" && wf.Year == 0 {
 		filterNames = append(filterNames, "стиль")
 	}
 
@@ -105,14 +106,15 @@ func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 }
 
 func (wf WineFilter) IncludesPrimaryFilters(filters []string) bool {
-	primaryFilters := map[string]bool{
-		"цвет":   true,
-		"страна": true,
-		"стиль":  true,
+	primaryFilters := map[string]string{
+		"цвет":   wf.Color,
+		"страна": wf.Country,
+		"стиль":  strings.Join(wf.Style, ","),
 	}
 
 	for _, f := range filters {
-		if _, ok := primaryFilters[f]; ok {
+		val, ok := primaryFilters[f]
+		if ok && val != "" {
 			return true
 		}
 	}
@@ -120,16 +122,16 @@ func (wf WineFilter) IncludesPrimaryFilters(filters []string) bool {
 }
 
 func (wf WineFilter) IncludesSecondaryFilters(filters []string) bool {
-	primaryFilters := map[string]bool{
-		"виноград":         true,
-		"сахар":            true,
-		"тело":             true,
-		"подходящие блюда": true,
-		"крепость":         true,
+	primaryFilters := map[string]string{
+		"виноград":         wf.Grape,
+		"сахар":            wf.Sugar,
+		"тело":             wf.Body,
+		"подходящие блюда": strings.Join(wf.MatchingDishes, ","),
+		"крепость":         wf.AlcoholPercentage.String(),
 	}
 
 	for _, f := range filters {
-		if _, ok := primaryFilters[f]; ok {
+		if val, ok := primaryFilters[f]; ok && val != "" {
 			return true
 		}
 	}
@@ -159,7 +161,7 @@ func (wf WineFilter) GetEmptySecondaryFilters() []string {
 		filterNames = append(filterNames, "подходящие блюда")
 	}
 
-	if wf.AlcoholPercentage.To == 0 && wf.AlcoholPercentage.From == 0 {
+	if wf.AlcoholPercentage.IsEmpty() {
 		filterNames = append(filterNames, "крепость")
 	}
 
@@ -171,26 +173,14 @@ func (wf WineFilter) GetPrimaryFiltersCount() int {
 
 	if wf.Color != "" {
 		count++
-	} else {
-		if wf.Grape != "" || len(wf.MatchingDishes) > 0 {
-			count++
-		}
 	}
 
 	if wf.Country != "" {
 		count++
-	} else {
-		if wf.Region != "" {
-			count++
-		}
 	}
 
 	if len(wf.Style) > 0 {
 		count++
-	} else {
-		if wf.Grape != "" || wf.Year > 0 {
-			count++
-		}
 	}
 
 	return count
@@ -201,7 +191,7 @@ func (wf WineFilter) GetTotalPrimaryFiltersCount() int {
 }
 
 func (wf WineFilter) HasSecondaryFilters() bool {
-	return wf.Grape != "" || wf.Sugar != "" || wf.Body != "" || len(wf.MatchingDishes) > 0 || wf.AlcoholPercentage.To > 0 || wf.AlcoholPercentage.From > 0
+	return wf.Grape != "" || wf.Sugar != "" || wf.Body != "" || len(wf.MatchingDishes) > 0 || !wf.AlcoholPercentage.IsEmpty()
 }
 
 func (wf WineFilter) HasExpertFilters() bool {

@@ -70,19 +70,19 @@ func (wp *WineProvider) FindByCriteria(
 		query.Where("year = ?", f.Year)
 	}
 
-	if f.PriceRange != nil {
+	if f.PriceRange.IsEmpty() {
+		query.Where("price >= ?", DefaultPriceRangeFrom)
+		query.Where("price <= ?", DefaultPriceRangeTo)
+	} else {
 		if f.PriceRange.From > 0 {
 			query.Where("price >= ?", f.PriceRange.From)
 		}
 		if f.PriceRange.To > 0 {
 			query.Where("price <= ?", f.PriceRange.To)
 		}
-	} else {
-		query.Where("price >= ?", DefaultPriceRangeFrom)
-		query.Where("price <= ?", DefaultPriceRangeTo)
 	}
 
-	if f.AlcoholPercentage != nil {
+	if !f.AlcoholPercentage.IsEmpty() {
 		if f.AlcoholPercentage.From > 0 {
 			query.Where("alcohol_percentage >= ?", f.AlcoholPercentage.From)
 		}

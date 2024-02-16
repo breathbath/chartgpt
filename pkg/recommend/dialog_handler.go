@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ConversationHistoryWindow  = -time.Minute * 10
+	ConversationHistoryWindow  = -time.Minute * 30
 	ActionTypeFilterPrompt     = "filter_prompt"
 	FiltersContext             = "filters"
 	AdditionalTextPromptType   = "additional_text_prompt_type"
@@ -26,8 +26,8 @@ const (
 )
 
 type Action struct {
-	Type    string
-	Context map[string]interface{} `gorm:"serializer:json"`
+	Type    string                 `gorm:"type:string"`
+	Context map[string]interface{} `gorm:"type:string;serializer:json"`
 }
 
 func (a Action) GetFilters() []string {
@@ -66,9 +66,9 @@ func (a Action) GetAdditionalTextPromptType() string {
 }
 
 type DialogItem struct {
-	gorm.DB
-	InputFilter  *WineFilter `gorm:"embedded;embeddedPrefix:input_filter_;serializer:json"`
-	OutputAction Action      `gorm:"embedded;embeddedPrefix:output_action_"`
+	gorm.Model
+	InputFilter  *WineFilter `gorm:"type:string;serializer:json"`
+	OutputAction *Action     `gorm:"embedded;embeddedPrefix:output_action_"`
 	UserID       string
 	Path         string
 }
@@ -129,14 +129,14 @@ func (dh DialogHandler) DecideAction(
 	ctx context.Context,
 	f *WineFilter,
 	userID string,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 
 	log.Debugf("going to decide about next dialog action for filters: %s", f.String())
 
 	dialog, err := dh.loadDialog(userID)
 	if err != nil {
-		return Action{}, err
+		return nil, err
 	}
 
 	currentDialogItem := &DialogItem{
@@ -144,7 +144,9 @@ func (dh DialogHandler) DecideAction(
 		InputFilter: f,
 	}
 	defer func() {
-		dh.db.Create(currentDialogItem)
+		if currentDialogItem.OutputAction != nil && currentDialogItem.OutputAction.Type != "" {
+			dh.db.Create(currentDialogItem)
+		}
 	}()
 
 	if f.Name != "" {
@@ -165,7 +167,7 @@ func (dh DialogHandler) DecideAction(
 		return dh.handleSomePrimaryNoSecondarySomeExpertFilters(ctx, currentDialogItem, dialog)
 	}
 
-	if primaryFiltersCount < f.GetTotalPrimaryFiltersCount() && primaryFiltersCount > 0 && !f.HasExpertFilters() {
+	if primaryFiltersCount < f.GetTotalPrimaryFiltersCount() && !f.HasExpertFilters() {
 		return dh.handleSomePrimaryNoExpertFilters(ctx, currentDialogItem, dialog)
 	}
 
@@ -176,7 +178,7 @@ func (dh DialogHandler) handleSomePrimaryNoExpertFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	currentDialogItem.AddToPath("somePrimaryNoExpertFilters")
 	primaryFiltersCount := currentDialogItem.InputFilter.GetPrimaryFiltersCount()
 	if primaryFiltersCount == currentDialogItem.InputFilter.GetTotalPrimaryFiltersCount()-1 {
@@ -190,7 +192,7 @@ func (dh DialogHandler) handleAlmostAllPrimaryNoExpertFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 	log.Debug("has almost all primary and no expert filters")
 
@@ -199,7 +201,7 @@ func (dh DialogHandler) handleAlmostAllPrimaryNoExpertFilters(
 	previousMessage := dialog.Previous()
 	if previousMessage == nil || previousMessage.OutputAction.Type != ActionTypeFilterPrompt {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -214,7 +216,7 @@ func (dh DialogHandler) handleAlmostAllPrimaryNoExpertFilters(
 	if shouldPromptSecondaryFilters {
 		log.Debug("detected previous prompts, decided randomly to prompt secondary filters again")
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -226,7 +228,7 @@ func (dh DialogHandler) handleAlmostAllPrimaryNoExpertFilters(
 
 	currentDialogItem.AddToPathRecommend()
 	log.Debug("detected previous prompts, decided randomly not to prompt secondary filters again and give a recommendation")
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -237,20 +239,20 @@ func (dh DialogHandler) handleTooFewPrimaryNoExpertFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
-	log.Debug("has few primary and no expert filters")
+	log.Debug("has not enough primary and no expert filters")
 
 	primaryFiltersCount := currentDialogItem.InputFilter.GetPrimaryFiltersCount()
 
-	currentDialogItem.AddToPath("tooFewPrimaryNoExpertFilters")
+	currentDialogItem.AddToPath("notEnoughPrimaryNoExpertFilters")
 	previousPromptsCount := dialog.LatestPromptsCount()
 	const maxPreviosPrimaryFilterPromptsCount = 3
 	if previousPromptsCount == 0 || (previousPromptsCount < maxPreviosPrimaryFilterPromptsCount && primaryFiltersCount < currentDialogItem.InputFilter.GetTotalPrimaryFiltersCount()-1) {
 		emptyPrimaryFilters := currentDialogItem.InputFilter.GetEmptyPrimaryFilters()
 		log.Debugf("not enough required filters prompted, will prompt additional primary filters %+v", emptyPrimaryFilters)
 
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: emptyPrimaryFilters,
@@ -266,7 +268,7 @@ func (dh DialogHandler) handleTooFewPrimaryNoExpertFilters(
 	if !previousPromptIncludesSecondaryFilters {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
 		log.Debugf("enough primary filters prompted or prompt attempts for primary filters are elapsed and no secondary filters prompted previously, will prompt random secondary filters %+v", randomSecondaryFilters)
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -278,19 +280,19 @@ func (dh DialogHandler) handleTooFewPrimaryNoExpertFilters(
 
 	currentDialogItem.AddToPathRecommend()
 	log.Debug("prompted random secondary filters and enough primary filters or prompt attempts for primary filters are elapsed, decided to provide a recommendation")
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
 	return currentDialogItem.OutputAction, nil
 }
 
-func (dh DialogHandler) handleNameFilter(ctx context.Context, currentDialogItem *DialogItem) (Action, error) {
+func (dh DialogHandler) handleNameFilter(ctx context.Context, currentDialogItem *DialogItem) (*Action, error) {
 	log := logging.WithContext(ctx)
 	log.Debug("since name filter is provided, deciding to recommend by name")
 
 	currentDialogItem.AddToPath("notEmptyNameFilter").AddToPathRecommend()
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -301,7 +303,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 	currentDialogItem.AddToPath("hasAllPrimaryFilters")
 
@@ -310,7 +312,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 	previousPromptIncludesSecondaryFilters := previousPrompt != nil && previousPrompt.InputFilter.IncludesSecondaryFilters(previousPrompt.OutputAction.GetFilters())
 	if previousPromptIncludesSecondaryFilters {
 		log.Debug("all required filters are prompted and previous prompt includes secondary filters, decided to give a recommendation")
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeRecommendation,
 		}
 		currentDialogItem.AddToPathRecommend()
@@ -321,7 +323,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 	if shouldPromptSecondaryFilter {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
 		log.Debugf("all primary filters provided, randomply decided to prompt for random secondary filters %+v", randomSecondaryFilters)
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -333,7 +335,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 
 	if previousPrompt != nil && previousPrompt.OutputAction.GetAdditionalTextPromptType() == PromptedPreviousLikedWines {
 		log.Debugf("all primary filters provided and already prompted for liked wines, decided to provide a recommendation")
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeRecommendation,
 		}
 
@@ -344,7 +346,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 	shouldPromptPreviousLikedWines := utils.GetRandomBoolean()
 	if shouldPromptPreviousLikedWines {
 		log.Debug("all primary filters provided, randomly decided to about previously liked wines")
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				AdditionalTextPromptType: PromptedPreviousLikedWines,
@@ -356,7 +358,7 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 
 	log.Debug("all primary filters provided, randomly decided not to prompt previously liked wines, decided to provide a recommendation")
 	currentDialogItem.AddToPathRecommend()
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -366,13 +368,13 @@ func (dh DialogHandler) handleHasAllPrimaryFilters(
 func (dh DialogHandler) handleAllPrimarySomeSecondaryAndSomeExpertFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 	log.Debug("has all primary, some secondary and some expert filters, decided to do a recommendation")
 
 	currentDialogItem.AddToPath("allPrimarySomeSecondaryAndSomeExpertFilters").AddToPathRecommend()
 
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -383,7 +385,7 @@ func (dh DialogHandler) handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeE
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 	log.Debug("has not enough primary and some secondary and expert filters")
 
@@ -393,7 +395,7 @@ func (dh DialogHandler) handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeE
 	if previousMessage == nil || previousMessage.OutputAction.Type != ActionTypeFilterPrompt {
 		emptyPrimaryFilters := currentDialogItem.InputFilter.GetEmptyPrimaryFilters()
 		log.Debugf("primary filters were not prompted yet, will prompt filters %+v", emptyPrimaryFilters)
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: emptyPrimaryFilters,
@@ -403,9 +405,10 @@ func (dh DialogHandler) handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeE
 		return currentDialogItem.OutputAction, nil
 	}
 
-	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt && previousMessage.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
+	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt &&
+		previousMessage.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -418,7 +421,7 @@ func (dh DialogHandler) handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeE
 
 	currentDialogItem.AddToPathRecommend()
 	log.Debug("primary and random secondary filters were prompted already, decided to do a recommendation")
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -429,7 +432,7 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 	ctx context.Context,
 	currentDialogItem *DialogItem,
 	dialog Dialog,
-) (Action, error) {
+) (*Action, error) {
 	log := logging.WithContext(ctx)
 	log.Debug("has some primary, no secondary and some expert filters")
 
@@ -439,7 +442,7 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 	if previousMessage == nil {
 		emptyPrimaryFilters := currentDialogItem.InputFilter.GetEmptyPrimaryFilters()
 		log.Debugf("primary filters were not prompted yet, will prompt filters %+v", emptyPrimaryFilters)
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: emptyPrimaryFilters,
@@ -451,7 +454,7 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 
 	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt && previousMessage.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
-		currentDialogItem.OutputAction = Action{
+		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
 			Context: map[string]interface{}{
 				FiltersContext: randomSecondaryFilters,
@@ -464,7 +467,7 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 
 	log.Debug("primary and random secondary filters were prompted already, decided to do a recommendation")
 	currentDialogItem.AddToPathRecommend()
-	currentDialogItem.OutputAction = Action{
+	currentDialogItem.OutputAction = &Action{
 		Type: ActionTypeRecommendation,
 	}
 
@@ -494,7 +497,7 @@ func (dh DialogHandler) loadDialog(userId string) (Dialog, error) {
 
 	dialg := Dialog{}
 	res := dh.db.
-		Where("user_id = ? AND created_at = BETWEEN ? AND ?", userId, dialogWindow, today).
+		Where("user_id = ? AND created_at BETWEEN ? AND ?", userId, dialogWindow, today).
 		Order("created_at DESC").
 		Find(&dialg)
 

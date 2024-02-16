@@ -35,7 +35,7 @@ const (
 	ConversationTimeout           = time.Minute * 10
 	MaxScopedConversationMessages = 20
 	VoiceToTextModel              = "whisper-1"
-	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. Все рекомендации вин нужно делать путем вызова фукции find_wine. На другие темы отвечай что ты не знаешь что ответить. Если запрос слишком общий, задавай уточняющие вопросы по цвету, сахару, стране, региону сорту винограда, цене, крепости. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
+	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot (мужской род). Все ответы должны быть только про рекомендацию вин. Все рекомендации вин нужно делать путем вызова фукции find_wine. На другие темы отвечай что ты не знаешь что ответить. Если запрос слишком общий, задавай уточняющие вопросы по цвету, сахару, стране, региону сорту винограда, цене, крепости. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
 	NotFoundMessage               = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
 	PreviouslyLikedWines          = `Составь неформальный короткий текст, который запрашивает у пользователя информацию по похожему вину понравившееся ему ранее. Пользователь: `
 	PromptFiltersMessage          = `Запроси у пользователя дополнительную информацию для рекомендации по следующим фильтрам: %s`
@@ -312,7 +312,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 					"items": map[string]interface{}{
 						"type": "string",
 						"enum": []string{
-							"Аперитив", "Баранина", "блюда", "Вегетарианская", "Говядина", "Грибы", "Десерт", "дичь", "закуски", "Курица", "Морепродукты", "Мясные", "Овощи", "Оливки", "Острые", "Паста", "Пернатая", "Ракообразные", "Рыба", "Свинина", "Суши", "Сыр", "Телятина", "Фрукты", "Фуа-гра", "Ягнятина"},
+							"аперитив", "баранина", "блюда", "вегетарианская", "говядина", "грибы", "десерт", "дичь", "закуски", "курица", "морепродукты", "мясные", "овощи", "оливки", "острые", "паста", "пернатая", "ракообразные", "рыба", "свинина", "суши", "сыр", "телятина", "фрукты", "фуа-гра", "ягнятина"},
 					},
 				},
 				"тело": map[string]interface{}{
@@ -349,7 +349,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 					},
 				},
 			},
-			"required": []string{"цвет", "сахар"},
+			"required": []string{"цвет", "страна", "стиль"},
 		},
 	}
 	requestData := map[string]interface{}{
@@ -590,76 +590,56 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 
 	wineFilter := &recommend.WineFilter{}
 
-	if argumentsMap["цвет"] != nil {
-		wineFilter.Color = utils.ParseEnumStr(argumentsMap["цвет"], colors)
+	if val, ok := argumentsMap["цвет"]; ok {
+		wineFilter.Color = utils.ParseEnumStr(val, colors)
 	}
 
-	if argumentsMap["сахар"] != nil {
-		wineFilter.Sugar = utils.ParseEnumStr(argumentsMap["сахар"], sugars)
+	if val, ok := argumentsMap["сахар"]; ok {
+		wineFilter.Sugar = utils.ParseEnumStr(val, sugars)
 	}
 
-	if argumentsMap["страна"] != nil {
-		wineFilter.Country = fmt.Sprint(argumentsMap["страна"])
+	if val, ok := argumentsMap["страна"]; ok {
+		wineFilter.Country = fmt.Sprint(val)
 	}
 
-	if argumentsMap["регион"] != nil {
-		wineFilter.Region = fmt.Sprint(argumentsMap["регион"])
+	if val, ok := argumentsMap["регион"]; ok {
+		wineFilter.Region = fmt.Sprint(val)
 	}
 
-	if argumentsMap["виноград"] != nil {
-		wineFilter.Grape = fmt.Sprint(argumentsMap["виноград"])
+	if val, ok := argumentsMap["виноград"]; ok {
+		wineFilter.Grape = fmt.Sprint(val)
 	}
 
-	if argumentsMap["сорт"] != nil {
-		wineFilter.Grape = fmt.Sprint(argumentsMap["сорт"])
+	if val, ok := argumentsMap["сорт"]; ok {
+		wineFilter.Grape = fmt.Sprint(val)
 	}
 
-	if argumentsMap["год"] != nil {
-		year, err := strconv.Atoi(fmt.Sprint(argumentsMap["год"]))
+	if val, ok := argumentsMap["год"]; ok {
+		year, err := strconv.Atoi(fmt.Sprint(val))
 		if err == nil {
 			wineFilter.Year = year
 		}
 	}
 
-	if argumentsMap["крепость"] != nil {
-		rawRange, ok := argumentsMap["крепость"].([]interface{})
-		if ok {
-			wineFilter.AlcoholPercentage = utils.ParseRangeFloat(rawRange)
-		}
+	wineFilter.AlcoholPercentage = utils.ParseRangeFloat(argumentsMap, "крепость")
+
+	wineFilter.MatchingDishes = utils.ParseArgumentsToStrings(argumentsMap, "подходящие блюда")
+
+	if val, ok := argumentsMap["тело"]; ok {
+		wineFilter.Body = utils.ParseEnumStr(val, bodies)
 	}
 
-	if argumentsMap["подходящие блюда"] != nil {
-		rawList, ok := argumentsMap["подходящие блюда"].([]interface{})
-		if ok {
-			wineFilter.MatchingDishes = utils.ParseStrings(rawList)
-		}
+	if val, ok := argumentsMap["тип"]; ok {
+		wineFilter.Type = utils.ParseEnumStr(val, types)
 	}
 
-	if argumentsMap["тело"] != nil {
-		wineFilter.Body = utils.ParseEnumStr(argumentsMap["тело"], bodies)
+	if val, ok := argumentsMap["название"]; ok {
+		wineFilter.Name = fmt.Sprint(val)
 	}
 
-	if argumentsMap["тип"] != nil {
-		wineFilter.Type = utils.ParseEnumStr(argumentsMap["тип"], types)
-	}
+	wineFilter.PriceRange = utils.ParseRangeFloat(argumentsMap, "цена")
 
-	if argumentsMap["название"] != nil {
-		wineFilter.Name = fmt.Sprint(argumentsMap["название"])
-	}
-
-	if argumentsMap["цена"] != nil {
-		rawRange, ok := argumentsMap["цена"].([]interface{})
-		if ok {
-			wineFilter.PriceRange = utils.ParseRangeFloat(rawRange)
-		}
-	}
-
-	if argumentsMap["стиль"] != nil {
-		rawList, ok := argumentsMap["стиль"].([]interface{})
-		if ok {
-			wineFilter.Style = utils.ParseStrings(rawList)
-		}
-	}
+	wineFilter.Style = utils.ParseArgumentsToStrings(argumentsMap, "стиль")
 
 	return wineFilter, nil
 }

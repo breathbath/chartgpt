@@ -33,6 +33,30 @@ type RangeFloat struct {
 	To   float64
 }
 
+func (rf *RangeFloat) IsEmpty() bool {
+	if rf == nil {
+		return true
+	}
+
+	return rf.From == 0 && rf.To == 0
+}
+
+func (rf *RangeFloat) String() string {
+	if rf == nil {
+		return ""
+	}
+
+	if rf.From > 0 && rf.To > 0 {
+		return fmt.Sprintf("%.2f-%.2f", rf.From, rf.To)
+	}
+
+	if rf.From > 0 {
+		return fmt.Sprintf(">%.2f", rf.From)
+	}
+
+	return fmt.Sprintf("<%.2f", rf.To)
+}
+
 func NormalizeJSON(ctx context.Context, input string) string {
 	log := logrus.WithContext(ctx).WithField("function call", "NormalizeJSON")
 
@@ -86,28 +110,46 @@ func NormalizeJSON(ctx context.Context, input string) string {
 	return string(stdOut)
 }
 
-func ParseRangeFloat(rawRange []interface{}) (rangeRes *RangeFloat) {
-	for i, rawVal := range rawRange {
-		floatVal, ok := ParseFloat(rawVal)
-		if !ok {
-			continue
-		}
-		if rangeRes == nil {
-			rangeRes = &RangeFloat{}
-		}
+func ParseRangeFloat(keyValues map[string]interface{}, key string) (rangeRes *RangeFloat) {
+	rangeRes = &RangeFloat{}
 
-		if len(rawRange) == 1 {
-			rangeRes.From = floatVal
-		} else {
-			if i == 0 {
-				rangeRes.From = floatVal
-			} else {
-				rangeRes.To = floatVal
-			}
-		}
+	_, ok := keyValues[key]
+	if !ok {
+		return nil
 	}
 
-	return rangeRes
+	rawRange, ok := keyValues[key].([]interface{})
+	if ok {
+		for i, rawVal := range rawRange {
+			floatVal, ok := ParseFloat(rawVal)
+			if !ok {
+				continue
+			}
+
+			if len(rawRange) == 1 {
+				rangeRes.From = floatVal
+			} else {
+				if i == 0 {
+					rangeRes.From = floatVal
+				} else {
+					rangeRes.To = floatVal
+				}
+			}
+		}
+		return rangeRes
+	}
+
+	rangeStr, ok := keyValues[key].(string)
+	if !ok {
+		return nil
+	}
+	floatVal, ok := ParseFloat(rangeStr)
+	if ok {
+		rangeRes.From = floatVal
+		return rangeRes
+	}
+
+	return nil
 }
 
 func ParseEnumStr(rawVal interface{}, enums []string) string {
@@ -169,4 +211,23 @@ func ConvToStr(input interface{}) string {
 	}
 
 	return string(rawInputData)
+}
+
+func ParseArgumentsToStrings(input map[string]interface{}, key string) []string {
+	_, ok := input[key]
+	if !ok {
+		return nil
+	}
+
+	rawList, ok := input[key].([]interface{})
+	if ok {
+		return ParseStrings(rawList)
+	}
+
+	rawVal, ok := input[key].(string)
+	if ok {
+		return []string{rawVal}
+	}
+
+	return nil
 }
