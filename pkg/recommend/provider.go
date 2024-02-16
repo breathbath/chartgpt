@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+const (
+	DefaultPriceRangeFrom = 1000
+	DefaultPriceRangeTo   = 1500
+	DefaultWineType       = "Вино"
+)
+
 type WineProvider struct {
 	conn *gorm.DB
 }
@@ -48,6 +54,8 @@ func (wp *WineProvider) FindByCriteria(
 
 	if f.Type != "" {
 		query.Where("type = ?", f.Type)
+	} else {
+		query.Where("type = ?", DefaultWineType)
 	}
 
 	if f.Region != "" {
@@ -69,6 +77,9 @@ func (wp *WineProvider) FindByCriteria(
 		if f.PriceRange.To > 0 {
 			query.Where("price <= ?", f.PriceRange.To)
 		}
+	} else {
+		query.Where("price >= ?", DefaultPriceRangeFrom)
+		query.Where("price <= ?", DefaultPriceRangeTo)
 	}
 
 	if f.AlcoholPercentage != nil {

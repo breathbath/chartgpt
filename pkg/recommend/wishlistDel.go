@@ -82,17 +82,11 @@ func (afh *DeleteFromFavoritesHandler) handleSuccessCase(
 ) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	userFields := []string{}
 	responseFields := []string{}
-	if req.Sender.FirstName != "" {
-		userFields = append(userFields, "Имя: "+req.Sender.FirstName)
-	}
-	if req.Sender.LastName != "" {
-		userFields = append(userFields, "Фамилия: "+req.Sender.LastName)
-	}
 
-	if len(userFields) > 0 {
-		responseFields = append(responseFields, strings.Join(userFields, ", "))
+	sender := req.Sender.String()
+	if sender != "" {
+		responseFields = append(responseFields, sender)
 	}
 
 	if !alreadyDeleted && w.WineTextualSummaryStr() != "" {

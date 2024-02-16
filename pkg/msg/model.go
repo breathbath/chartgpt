@@ -20,6 +20,22 @@ func (s *Sender) GetID() string {
 	return s.ID
 }
 
+func (s *Sender) String() string {
+	userFields := []string{}
+	if s.FirstName != "" {
+		userFields = append(userFields, "Имя: "+s.FirstName)
+	}
+	if s.LastName != "" {
+		userFields = append(userFields, "Фамилия: "+s.LastName)
+	}
+
+	if len(userFields) == 0 {
+		return ""
+	}
+
+	return strings.Join(userFields, ", ")
+}
+
 const FormatVoice = "voice"
 
 type File struct {

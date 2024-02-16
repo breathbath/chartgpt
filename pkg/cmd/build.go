@@ -58,6 +58,8 @@ func BuildMessageRouter(
 
 	wineProvider := recommend.NewWineProvider(dbConn)
 
+	dialogHandler := recommend.NewDialogHandler(dbConn)
+
 	chatCompletionHandler, err := chatgpt.NewChatCompletionHandler(
 		chartGptCfg,
 		cacheClient,
@@ -65,6 +67,7 @@ func BuildMessageRouter(
 		isScopedModeFunc,
 		wineProvider,
 		dbConn,
+		dialogHandler,
 	)
 	if err != nil {
 		return nil, err

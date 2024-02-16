@@ -4,6 +4,7 @@ import (
 	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/utils"
 	"encoding/json"
+	"fmt"
 	"gorm.io/gorm"
 )
 
@@ -84,6 +85,136 @@ type WineFilter struct {
 	PriceRange *utils.RangeFloat
 	MatchingDishes,
 	Style []string
+}
+
+func (wf WineFilter) GetEmptyPrimaryFilters() []string {
+	filterNames := []string{}
+	if wf.Color == "" {
+		filterNames = append(filterNames, "цвет")
+	}
+
+	if wf.Country == "" {
+		filterNames = append(filterNames, "страна")
+	}
+
+	if len(wf.Style) == 0 {
+		filterNames = append(filterNames, "стиль")
+	}
+
+	return filterNames
+}
+
+func (wf WineFilter) IncludesPrimaryFilters(filters []string) bool {
+	primaryFilters := map[string]bool{
+		"цвет":   true,
+		"страна": true,
+		"стиль":  true,
+	}
+
+	for _, f := range filters {
+		if _, ok := primaryFilters[f]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (wf WineFilter) IncludesSecondaryFilters(filters []string) bool {
+	primaryFilters := map[string]bool{
+		"виноград":         true,
+		"сахар":            true,
+		"тело":             true,
+		"подходящие блюда": true,
+		"крепость":         true,
+	}
+
+	for _, f := range filters {
+		if _, ok := primaryFilters[f]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (wf WineFilter) GetRandomSecondaryFilters() []string {
+	emptyFilters := wf.GetEmptySecondaryFilters()
+	return utils.GetRandomItems(emptyFilters)
+}
+
+func (wf WineFilter) GetEmptySecondaryFilters() []string {
+	filterNames := []string{}
+	if wf.Grape == "" {
+		filterNames = append(filterNames, "виноград")
+	}
+
+	if wf.Sugar == "" {
+		filterNames = append(filterNames, "сахар")
+	}
+
+	if wf.Body == "" {
+		filterNames = append(filterNames, "тело")
+	}
+
+	if len(wf.MatchingDishes) == 0 {
+		filterNames = append(filterNames, "подходящие блюда")
+	}
+
+	if wf.AlcoholPercentage.To == 0 && wf.AlcoholPercentage.From == 0 {
+		filterNames = append(filterNames, "крепость")
+	}
+
+	return filterNames
+}
+
+func (wf WineFilter) GetPrimaryFiltersCount() int {
+	count := 0
+
+	if wf.Color != "" {
+		count++
+	} else {
+		if wf.Grape != "" || len(wf.MatchingDishes) > 0 {
+			count++
+		}
+	}
+
+	if wf.Country != "" {
+		count++
+	} else {
+		if wf.Region != "" {
+			count++
+		}
+	}
+
+	if len(wf.Style) > 0 {
+		count++
+	} else {
+		if wf.Grape != "" || wf.Year > 0 {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (wf WineFilter) GetTotalPrimaryFiltersCount() int {
+	return 3
+}
+
+func (wf WineFilter) HasSecondaryFilters() bool {
+	return wf.Grape != "" || wf.Sugar != "" || wf.Body != "" || len(wf.MatchingDishes) > 0 || wf.AlcoholPercentage.To > 0 || wf.AlcoholPercentage.From > 0
+}
+
+func (wf WineFilter) HasExpertFilters() bool {
+	return wf.Year > 0 || wf.Region != ""
+}
+
+func (wf WineFilter) String() string {
+	wineJson, err := json.Marshal(wf)
+	if err != nil {
+		return fmt.Sprint(wf)
+	}
+
+	return string(wineJson)
 }
 
 func (w Wine) String() string {

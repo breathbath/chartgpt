@@ -37,6 +37,8 @@ const (
 	VoiceToTextModel              = "whisper-1"
 	SystemMessage                 = `ты система рекомендации вин WinechefBot. Можно вести разговор только о вине. Если спросят, кто ты, отвечай WinechefBot. Все ответы должны быть только про рекомендацию вин. Все рекомендации вин нужно делать путем вызова фукции find_wine. На другие темы отвечай что ты не знаешь что ответить. Если запрос слишком общий, задавай уточняющие вопросы по цвету, сахару, стране, региону сорту винограда, цене, крепости. Ценовые категории: бюджетный до 1000 руб, средний от 1000 до 1500 руб, премиум от 1500 до 2500 руб и люкс свыше 2500 руб. Если не указан год выпуска, то пропускай упоминание о годе. Низкая 5-10%. Классификация вин по крепости: низкая от 1 до 11.5%, средняя от 11,5 до 13,5%. средне высокая от 13,5 до 15%, высокая 15 и выше. Если цена не указана в диалоге, то не завай ее диапазон в функции find_wine.`
 	NotFoundMessage               = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
+	PreviouslyLikedWines          = `Составь неформальный короткий текст, который запрашивает у пользователя информацию по похожему вину понравившееся ему ранее. Пользователь: `
+	PromptFiltersMessage          = `Запроси у пользователя дополнительную информацию для рекомендации по следующим фильтрам: %s`
 )
 
 var colors = []string{"Белое", "Розовое", "Красное", "Оранжевое"}
@@ -47,7 +49,7 @@ var botLikeTexts = []string{
 	"Я надеюсь, что тебе понравилось наше общение. Мы очень ценим твоё мнение! Пожалуйста, поставь оценку нашей работе: лайк или дислайк. Буду признателен за твою честную оценку!",
 	"Прости, если отвлек тебя от чего-то важного. Но мне очень интересно узнать твоё мнение! Если у тебя есть возможность, буду благодарен, если ты поставишь оценку. Твоё мнение важно для меня!",
 	"Прости, если путаю тебя своими вопросами. Но мне действительно интересно, что ты думаешь о моих рекомендациях. Пожалуйста, поставь оценку. Заранее благодарим за твоё мнение!",
-	"Hey! Просто хотел напомнить тебе о возможности оценить мою работу. Если у тебя есть 1 секунда свободного времени, пожалуйста, нажми на одну из кнопок ниже. Спасибо большое!",
+	"Хей! Просто хотел напомнить тебе о возможности оценить мою работу. Если у тебя есть 1 секунда свободного времени, пожалуйста, нажми на одну из кнопок ниже. Спасибо большое!",
 }
 
 type ChatCompletionHandler struct {
@@ -57,6 +59,7 @@ type ChatCompletionHandler struct {
 	isScopedMode   func() bool
 	wineProvider   *recommend.WineProvider
 	dbConn         *gorm.DB
+	dialogHandler  *recommend.DialogHandler
 }
 
 func NewChatCompletionHandler(
@@ -66,6 +69,7 @@ func NewChatCompletionHandler(
 	isScopedMode func() bool,
 	wineProvider *recommend.WineProvider,
 	dbConn *gorm.DB,
+	dialogHandler *recommend.DialogHandler,
 ) (h *ChatCompletionHandler, err error) {
 	e := cfg.Validate()
 	if e.HasErrors() {
@@ -79,6 +83,7 @@ func NewChatCompletionHandler(
 		isScopedMode:   isScopedMode,
 		wineProvider:   wineProvider,
 		dbConn:         dbConn,
+		dialogHandler:  dialogHandler,
 	}, nil
 }
 
@@ -306,6 +311,8 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 					"type": "array",
 					"items": map[string]interface{}{
 						"type": "string",
+						"enum": []string{
+							"Аперитив", "Баранина", "блюда", "Вегетарианская", "Говядина", "Грибы", "Десерт", "дичь", "закуски", "Курица", "Морепродукты", "Мясные", "Овощи", "Оливки", "Острые", "Паста", "Пернатая", "Ракообразные", "Рыба", "Свинина", "Суши", "Сыр", "Телятина", "Фрукты", "Фуа-гра", "Ягнятина"},
 					},
 				},
 				"тело": map[string]interface{}{
@@ -497,13 +504,67 @@ func (h *ChatCompletionHandler) processToolCall(
 	for i := range choice.Message.ToolCalls {
 		toolCall := choice.Message.ToolCalls[i]
 		if toolCall.Function.Name == "find_wine" {
-			return h.callFindWine(ctx, toolCall.Function.Arguments, history, req, recommendStats)
+			wineFilter, err := h.parseFilter(ctx, toolCall.Function.Arguments)
+			if err != nil {
+				return responseMessage, err
+			}
+			recommendStats.FunctionCall = string(toolCall.Function.Arguments)
+
+			dialogAction, err := h.dialogHandler.DecideAction(ctx, wineFilter, req.Sender.GetID())
+			if err != nil {
+				return nil, err
+			}
+
+			if dialogAction.IsRecommendation() {
+				return h.callFindWine(ctx, wineFilter, history, req, recommendStats)
+			}
+
+			if dialogAction.IsPromptedPreviousLikedWines() {
+				return h.promptPreviouslyLikedWines(ctx, req)
+			}
+
+			filters := dialogAction.GetFilters()
+			if len(filters) > 0 {
+				respMessage, err := h.GenerateResponse(
+					ctx,
+					SystemMessage,
+					fmt.Sprintf(PromptFiltersMessage, strings.Join(filters, ", ")),
+					"recommendation_filters_prompt",
+					req,
+				)
+				if err != nil {
+					return nil, err
+				}
+				return &msg.ResponseMessage{
+					Message: respMessage,
+				}, nil
+			}
+			continue
 		}
 	}
 
 	log.Errorf("Didn't find any matching function: %+v", choice.Message)
 
 	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
+}
+
+func (h *ChatCompletionHandler) promptPreviouslyLikedWines(
+	ctx context.Context,
+	req *msg.Request,
+) (responseMessage *msg.ResponseMessage, err error) {
+	respMessage, err := h.GenerateResponse(
+		ctx,
+		SystemMessage,
+		PreviouslyLikedWines+req.Sender.String(),
+		"previous_likes_prompt",
+		req,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &msg.ResponseMessage{
+		Message: respMessage,
+	}, nil
 }
 
 func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
@@ -605,17 +666,12 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 
 func (h *ChatCompletionHandler) callFindWine(
 	ctx context.Context,
-	arguments json.RawMessage,
+	wineFilter *recommend.WineFilter,
 	history *[]ConversationMessage,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
 ) (responseMessage *msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
-
-	wineFilter, err := h.parseFilter(ctx, arguments)
-	if err != nil {
-		return responseMessage, err
-	}
 
 	found, wineFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats)
 	if err != nil {
@@ -641,7 +697,6 @@ func (h *ChatCompletionHandler) callFindWine(
 		return responseMessage, err
 	}
 
-	recommendStats.FunctionCall = string(arguments)
 	recommendStats.RecommendationText = text
 	recommendStats.RecommendedWineID = wineFromDb.Article
 	recommendStats.RecommendedWineSummary = wineFromDb.WineTextualSummaryStr()
@@ -666,11 +721,7 @@ func (h *ChatCompletionHandler) callFindWine(
 	}
 
 	op := &msg.Options{}
-	//op.WithPredefinedResponse(msg.PredefinedResponse{
-	//	Text: "❤️ " + "Нравится",
-	//	Type: msg.PredefinedResponseInline,
-	//	Data: h.buildLikeQuery(ctx),
-	//})
+
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "📌️ " + "Запомнить",
 		Type: msg.PredefinedResponseInline,
