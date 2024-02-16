@@ -90,15 +90,15 @@ type WineFilter struct {
 
 func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 	filterNames := []string{}
-	if wf.Color == "" && wf.Grape == "" && len(wf.MatchingDishes) == 0 {
+	if wf.Color == "" {
 		filterNames = append(filterNames, "цвет")
 	}
 
-	if wf.Country == "" && wf.Region == "" {
+	if wf.Country == "" {
 		filterNames = append(filterNames, "страна")
 	}
 
-	if len(wf.Style) == 0 && wf.Grape == "" && wf.Year == 0 {
+	if len(wf.Style) == 0 {
 		filterNames = append(filterNames, "стиль")
 	}
 

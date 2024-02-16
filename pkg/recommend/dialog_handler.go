@@ -155,7 +155,7 @@ func (dh DialogHandler) DecideAction(
 
 	primaryFiltersCount := f.GetPrimaryFiltersCount()
 
-	if primaryFiltersCount < f.GetTotalPrimaryFiltersCount() && primaryFiltersCount > 0 && f.HasSecondaryFilters() && f.HasExpertFilters() {
+	if primaryFiltersCount < f.GetTotalPrimaryFiltersCount() && f.HasSecondaryFilters() && f.HasExpertFilters() {
 		return dh.handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeExpert(ctx, currentDialogItem, dialog)
 	}
 
@@ -406,7 +406,7 @@ func (dh DialogHandler) handleHasNotEnoughPrimaryFiltersAndSomeSecondaryAndSomeE
 	}
 
 	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt &&
-		previousMessage.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
+		currentDialogItem.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
 		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
@@ -441,6 +441,9 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 	previousMessage := dialog.Previous()
 	if previousMessage == nil {
 		emptyPrimaryFilters := currentDialogItem.InputFilter.GetEmptyPrimaryFilters()
+		if len(emptyPrimaryFilters) == 0 {
+
+		}
 		log.Debugf("primary filters were not prompted yet, will prompt filters %+v", emptyPrimaryFilters)
 		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
@@ -452,7 +455,7 @@ func (dh DialogHandler) handleSomePrimaryNoSecondarySomeExpertFilters(
 		return currentDialogItem.OutputAction, nil
 	}
 
-	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt && previousMessage.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
+	if previousMessage.OutputAction.Type == ActionTypeFilterPrompt && currentDialogItem.InputFilter.IncludesPrimaryFilters(previousMessage.OutputAction.GetFilters()) {
 		randomSecondaryFilters := currentDialogItem.InputFilter.GetRandomSecondaryFilters()
 		currentDialogItem.OutputAction = &Action{
 			Type: ActionTypeFilterPrompt,
