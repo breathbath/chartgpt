@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"strings"
+	"time"
 )
 
 const LikeCommand = "/like"
@@ -128,11 +129,9 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	var existingLike Like
 	res := query.Take(&existingLike)
 	if res.Error == nil {
-		if existingLike.LikeValue != like.LikeValue {
-			res := lh.db.Model(&Like{}).Where("id=?", existingLike.ID).Update("like_value", like.LikeValue)
-			if err := res.Error; err != nil {
-				log.Errorf("failed to update like with id %d: %v", existingLike.ID, err)
-			}
+		res := lh.db.Model(&Like{}).Where("id=?", existingLike.ID).Update("updated_at", time.Now().UTC())
+		if err := res.Error; err != nil {
+			log.Errorf("failed to update like with id %d: %v", existingLike.ID, err)
 		}
 
 	} else if errors.Is(res.Error, gorm.ErrRecordNotFound) {
