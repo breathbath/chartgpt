@@ -23,6 +23,7 @@ type PredefinedResponse struct {
 	Text string
 	Data string
 	Type string
+	Link string
 }
 
 type PredefinedResponseOptions struct {

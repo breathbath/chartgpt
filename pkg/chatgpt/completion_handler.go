@@ -453,40 +453,75 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		},
 	}
 
-	var userLike recommend.Like
-	res := h.dbConn.First(&userLike, "user_login = ?", req.Sender.UserName)
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			delayedOptions := &msg.Options{}
-			delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
-				Text: "❤️ " + "Нравится",
-				Type: msg.PredefinedResponseInline,
-				Data: fmt.Sprintf("%s %d", recommend.LikeCommand, recommendStats.ID),
-			})
-			delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
-				Text: "👎️ " + "Не нравится",
-				Type: msg.PredefinedResponseInline,
-				Data: fmt.Sprintf("%s %d", recommend.DisLikeCommand, recommendStats.ID),
-			})
-			respMessages = append(respMessages, msg.ResponseMessage{
-				Message: utils.SelectRandomMessage(botLikeTexts),
-				Type:    msg.Success,
-				Options: delayedOptions,
-				DelayedOptions: &msg.DelayedOptions{
-					Timeout: time.Second * 30,
-					Ctx:     ctx,
-				},
-			})
-		} else if res.Error != nil {
-			log.Errorf("failed to find like from user %q: %v", req.Sender.GetID(), res.Error)
-		}
+	feedbackMessage, err := h.feedbackMessage(ctx, req, recommendStats)
+	if err != nil {
+		log.Errorf("failed to generate feedback message: %v", err)
 	} else {
-		log.Debug("Skipping delayed like message since user already left a like before")
+		if feedbackMessage != nil {
+			respMessages = append(respMessages, *feedbackMessage)
+		}
 	}
 
 	return &msg.Response{
 		Messages: respMessages,
 	}, nil
+}
+
+func (h *ChatCompletionHandler) feedbackMessage(
+	ctx context.Context,
+	req *msg.Request,
+	recommendStats *monitoring.Recommendation,
+) (*msg.ResponseMessage, error) {
+	log := logging.WithContext(ctx)
+
+	var userLike recommend.Like
+	res := h.dbConn.First(&userLike, "user_login = ?", req.Sender.UserName)
+
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return h.createFeedbackResponse(ctx, recommendStats), nil
+		}
+		return nil, res.Error
+	}
+
+	currentTime := time.Now()
+
+	timeDiff := currentTime.Sub(userLike.CreatedAt)
+	days := int(timeDiff.Hours() / 24)
+	// Check if the number of days is a multiple of seven
+	if days%7 == 0 {
+		return h.createFeedbackResponse(ctx, recommendStats), nil
+	}
+
+	log.Debug("Skipping delayed like message since user already left a like before")
+	return nil, nil
+}
+
+func (h *ChatCompletionHandler) createFeedbackResponse(
+	ctx context.Context,
+	recommendStats *monitoring.Recommendation,
+) *msg.ResponseMessage {
+	delayedOptions := &msg.Options{}
+	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "❤️ " + "Нравится",
+		Type: msg.PredefinedResponseInline,
+		Data: fmt.Sprintf("%s %d", recommend.LikeCommand, recommendStats.ID),
+	})
+	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "🗣️️ " + "Отзыв",
+		Type: msg.PredefinedResponseInline,
+		Data: fmt.Sprintf("%s %d", recommend.DisLikeCommand, recommendStats.ID),
+		Link: "https://t.me/ai_winechef",
+	})
+	return &msg.ResponseMessage{
+		Message: utils.SelectRandomMessage(botLikeTexts),
+		Type:    msg.Success,
+		Options: delayedOptions,
+		DelayedOptions: &msg.DelayedOptions{
+			Timeout: time.Second * 30,
+			Ctx:     ctx,
+		},
+	}
 }
 
 func (h *ChatCompletionHandler) processToolCall(
