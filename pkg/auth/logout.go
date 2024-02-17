@@ -30,7 +30,7 @@ func (h *LogoutHandler) CanHandle(_ context.Context, req *msg.Request) (bool, er
 func (h *LogoutHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user == nil {
 		log.Warnf("user not found, will do nothing")

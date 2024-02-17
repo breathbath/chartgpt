@@ -1,7 +1,6 @@
 package recommend
 
 import (
-	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
@@ -154,8 +153,7 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 	log.Debugf("Will handle add to favorites for message %q", req.Message)
 
 	addToFavsQuery := utils.ExtractCommandValue(req.Message, AddToFavoritesCommand)
-	usr := auth.GetUserFromReq(req)
-	if usr == nil {
+	if req.Sender == nil {
 		log.Error("Failed to find user data in the current request")
 		return afh.handleErrorCase(ctx)
 	}
@@ -179,12 +177,12 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Going to find a favorite wine %d and user %q", wineFromDb.ID, usr.Login)
+	log.Debugf("Going to find a favorite wine %d and user %q", wineFromDb.ID, req.Sender.UserName)
 	var wineFavorite WineFavorite
-	res = afh.db.Where("wine_id = ?", wineFromDb.ID).Where("user_login = ?", usr.Login).First(&wineFavorite)
+	res = afh.db.Where("wine_id = ?", wineFromDb.ID).Where("user_login = ?", req.Sender.UserName).First(&wineFavorite)
 
 	if res.Error == nil {
-		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, usr.Login, wineFavorite.ID)
+		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, req.Sender.UserName, wineFavorite.ID)
 		return afh.handleSuccessCase(ctx, req, &wineFromDb, true)
 	}
 	if !errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -192,11 +190,11 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Didn't find a favorite for wine %d, user %s, id %d, will create a new one", wineFromDb.ID, usr.Login, wineFavorite.ID)
+	log.Debugf("Didn't find a favorite for wine %d, user %s, id %d, will create a new one", wineFromDb.ID, req.Sender.UserName, wineFavorite.ID)
 
 	wineFavorite = WineFavorite{
 		Wine:           wineFromDb,
-		UserLogin:      usr.Login,
+		UserLogin:      req.Sender.UserName,
 		Recommendation: recommend,
 	}
 	result := afh.db.Create(&wineFavorite)
@@ -205,7 +203,6 @@ func (afh *AddToFavoritesHandler) Handle(ctx context.Context, req *msg.Request) 
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Created a wine favorite %d for wine %d, user %s, will create a new one", wineFavorite.ID, wineFromDb.ID, usr.Login)
-
+	log.Debugf("Created a wine favorite %d for wine %d, user %s, will create a new one", wineFavorite.ID, wineFromDb.ID, req.Sender.UserName)
 	return afh.handleSuccessCase(ctx, req, &wineFromDb, false)
 }

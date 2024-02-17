@@ -1,7 +1,6 @@
 package recommend
 
 import (
-	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
@@ -172,20 +171,19 @@ func (afh *ListFavoritesHandler) Handle(ctx context.Context, req *msg.Request) (
 	log := logrus.WithContext(ctx)
 	log.Debugf("Will handle list favorites for message %q", req.Message)
 
-	usr := auth.GetUserFromReq(req)
-	if usr == nil {
+	if req.Sender == nil {
 		log.Error("Failed to find user data in the current request")
 		return afh.handleErrorCase(ctx)
 	}
 
 	var wineFavorites []WineFavorite
-	res := afh.db.Preload("Wine").Where("user_login = ?", usr.Login).Find(&wineFavorites)
+	res := afh.db.Preload("Wine").Where("user_login = ?", req.Sender.UserName).Find(&wineFavorites)
 	if err := res.Error; err != nil {
-		log.Errorf("failed to find favorites for user %q: %v", usr.Login, err)
+		log.Errorf("failed to find favorites for user %q: %v", req.Sender.UserName, err)
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Found %d favorites for user %q", usr.Login)
+	log.Debugf("Found %d favorites for user %q", req.Sender.UserName)
 
 	return afh.handleSuccessCase(ctx, req, wineFavorites)
 }

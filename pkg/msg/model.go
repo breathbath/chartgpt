@@ -7,9 +7,11 @@ import (
 )
 
 type Sender struct {
-	ID        string
-	FirstName string
-	LastName  string
+	ID,
+	FirstName,
+	UserName,
+	LastName,
+	Language string
 }
 
 func (s *Sender) GetID() string {

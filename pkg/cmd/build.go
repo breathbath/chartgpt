@@ -38,7 +38,7 @@ func BuildMessageRouter(
 	}
 
 	isAdminDetector := func(req *msg.Request) bool {
-		usr := auth.GetUserFromReq(req)
+		usr := auth.GetAdminUserFromReq(req)
 		return usr != nil && usr.Role == auth.AdminRole
 	}
 

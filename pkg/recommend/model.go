@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type Wine struct {
@@ -103,39 +102,6 @@ func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 	}
 
 	return filterNames
-}
-
-func (wf WineFilter) IncludesPrimaryFilters(filters []string) bool {
-	primaryFilters := map[string]string{
-		"цвет":   wf.Color,
-		"страна": wf.Country,
-		"стиль":  strings.Join(wf.Style, ","),
-	}
-
-	for _, f := range filters {
-		val, ok := primaryFilters[f]
-		if ok && val != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func (wf WineFilter) IncludesSecondaryFilters(filters []string) bool {
-	primaryFilters := map[string]string{
-		"виноград":         wf.Grape,
-		"сахар":            wf.Sugar,
-		"тело":             wf.Body,
-		"подходящие блюда": strings.Join(wf.MatchingDishes, ","),
-		"крепость":         wf.AlcoholPercentage.String(),
-	}
-
-	for _, f := range filters {
-		if val, ok := primaryFilters[f]; ok && val != "" {
-			return true
-		}
-	}
-	return false
 }
 
 func (wf WineFilter) GetRandomSecondaryFilters() []string {

@@ -1,7 +1,6 @@
 package recommend
 
 import (
-	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
@@ -135,8 +134,7 @@ func (afh *DeleteFromFavoritesHandler) Handle(ctx context.Context, req *msg.Requ
 	log.Debugf("Will handle delete from favorites for message %q", req.Message)
 
 	wineArticle := utils.ExtractCommandValue(req.Message, DeleteFromFavoritesCommand)
-	usr := auth.GetUserFromReq(req)
-	if usr == nil {
+	if req.Sender == nil {
 		log.Error("Failed to find user data in the current request")
 		return afh.handleErrorCase(ctx)
 	}
@@ -149,19 +147,19 @@ func (afh *DeleteFromFavoritesHandler) Handle(ctx context.Context, req *msg.Requ
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Going to find a favorite wine %d and user %q", wineFromDb.ID, usr.Login)
+	log.Debugf("Going to find a favorite wine %d and user %q", wineFromDb.ID, req.Sender.UserName)
 	var wineFavorite WineFavorite
-	res = afh.db.Where("wine_id = ?", wineFromDb.ID).Where("user_login = ?", usr.Login).First(&wineFavorite)
+	res = afh.db.Where("wine_id = ?", wineFromDb.ID).Where("user_login = ?", req.Sender.UserName).First(&wineFavorite)
 
 	if res.Error == nil {
-		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, usr.Login, wineFavorite.ID)
+		log.Debugf("Found a favorite for wine %d, user %s, id %d", wineFromDb.ID, req.Sender.UserName, wineFavorite.ID)
 		result := afh.db.Unscoped().Delete(&wineFavorite)
 		if err := result.Error; err != nil {
 			log.Errorf("failed to delete a wine from favorites %q: %v", wineArticle, err)
 			return afh.handleErrorCase(ctx)
 		}
 
-		log.Debugf("Deleted a wine favorite %d for wine %d, user %s", wineFavorite.ID, wineFromDb.ID, usr.Login)
+		log.Debugf("Deleted a wine favorite %d for wine %d, user %s", wineFavorite.ID, wineFromDb.ID, req.Sender.UserName)
 
 		return afh.handleSuccessCase(ctx, req, &wineFromDb, false)
 	}

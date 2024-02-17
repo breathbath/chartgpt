@@ -1,7 +1,6 @@
 package recommend
 
 import (
-	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
@@ -93,13 +92,12 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 		userResponseMessages = append(userResponseMessages, "Оценка: не понравилось")
 	}
 
-	usr := auth.GetUserFromReq(req)
-	if usr == nil {
+	if req.Sender == nil {
 		log.Error("Failed to find user data in the current request")
 		return lh.handleErrorCase(ctx)
 	}
 
-	like.UserLogin = usr.Login
+	like.UserLogin = req.Sender.UserName
 
 	var reco *monitoring.Recommendation
 
@@ -140,11 +138,11 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	} else if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		res := lh.db.Create(like)
 		if err := res.Error; err != nil {
-			log.Errorf("failed to save like from user %q: %v", usr.Login, err)
+			log.Errorf("failed to save like from user %q: %v", req.Sender.UserName, err)
 		}
 
 	} else if res.Error != nil {
-		log.Errorf("failed to find like from user %q: %v", usr.Login, res.Error)
+		log.Errorf("failed to find like from user %q: %v", req.Sender.UserName, res.Error)
 	}
 
 	responseMessage, err := lh.respGen.GenerateResponse(

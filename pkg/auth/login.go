@@ -23,7 +23,7 @@ func NewLoginHandler(us *UserStorage, cfg *Config) *LoginHandler {
 }
 
 func (lh *LoginHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user == nil {
 		return &msg.Response{
@@ -95,7 +95,7 @@ func (lh *LoginHandler) CanHandle(_ context.Context, req *msg.Request) (bool, er
 		return false, nil
 	}
 
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user != nil && user.State == UserVerified && (user.LoginTill == int64(0) || user.LoginTill > time.Now().Unix()) {
 		return false, nil

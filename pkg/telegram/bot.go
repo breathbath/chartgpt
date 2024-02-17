@@ -48,14 +48,11 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 	sender := new(msg.Sender)
 	telegramSender := telegramCtx.Sender()
 	if telegramSender != nil {
-		id := telegramSender.Username
-		if id == "" {
-			id = fmt.Sprint(telegramSender.ID)
-		}
-
-		sender.ID = id
+		sender.ID = fmt.Sprint(telegramSender.ID)
 		sender.LastName = telegramSender.LastName
 		sender.FirstName = telegramSender.FirstName
+		sender.UserName = telegramSender.Username
+		sender.Language = telegramSender.LanguageCode
 	}
 
 	var conversationID int64

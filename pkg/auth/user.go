@@ -22,7 +22,7 @@ const (
 	usersVersion = "v1"
 )
 
-func GetUserFromReq(req *msg.Request) *CachedUser {
+func GetAdminUserFromReq(req *msg.Request) *CachedUser {
 	userI, ok := req.Meta["curUser"]
 	if !ok {
 		return nil
@@ -268,7 +268,7 @@ func (au *AddUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg.Re
 }
 
 func (au *AddUserCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
 		return help.Result{}
@@ -342,7 +342,7 @@ func (lu *ListUsersCommand) Handle(ctx context.Context, req *msg.Request) (*msg.
 }
 
 func (lu *ListUsersCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
 		return help.Result{}
@@ -438,7 +438,7 @@ func (du *DeleteUserCommand) Handle(ctx context.Context, req *msg.Request) (*msg
 }
 
 func (du *DeleteUserCommand) GetHelp(_ context.Context, req *msg.Request) help.Result {
-	user := GetUserFromReq(req)
+	user := GetAdminUserFromReq(req)
 
 	if user == nil || user.Role != AdminRole {
 		return help.Result{}

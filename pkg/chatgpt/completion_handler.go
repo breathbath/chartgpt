@@ -518,10 +518,6 @@ func (h *ChatCompletionHandler) processToolCall(
 				return h.callFindWine(ctx, wineFilter, history, req, recommendStats)
 			}
 
-			if dialogAction.IsPromptedPreviousLikedWines() {
-				return h.promptPreviouslyLikedWines(ctx, req)
-			}
-
 			filters := dialogAction.GetFilters()
 			if len(filters) > 0 {
 				respMessage, err := h.GenerateResponse(
