@@ -23,6 +23,19 @@
   "liveNow": false,
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 8,
+      "panels": [],
+      "title": "Token usage",
+      "type": "row"
+    },
+    {
       "datasource": {
         "type": "mysql",
         "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
@@ -75,7 +88,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 6,
       "options": {
@@ -164,7 +177,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 1
       },
       "id": 7,
       "options": {
@@ -182,7 +195,7 @@
         "showThresholdMarkers": false,
         "sizing": "auto"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "10.3.3",
       "targets": [
         {
           "dataset": "mysql",
@@ -223,11 +236,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 9
       },
       "id": 5,
       "panels": [],
-      "title": "Row title",
+      "title": "Users Tracking",
       "type": "row"
     },
     {
@@ -238,28 +251,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -275,41 +267,40 @@
               }
             ]
           },
-          "unitScale": true
+          "unit": "none",
+          "unitScale": false
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
-        "w": 12,
+        "h": 6,
+        "w": 5,
         "x": 0,
-        "y": 9
+        "y": 10
       },
-      "id": 3,
+      "id": 10,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
         },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showThresholdLabels": false,
+        "showThresholdMarkers": false,
+        "sizing": "auto",
+        "text": {
+          "titleSize": 1
+        }
       },
+      "pluginVersion": "10.3.3",
       "targets": [
         {
-          "dataset": "wine",
+          "dataset": "mysql",
           "datasource": {
             "type": "mysql",
             "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
@@ -317,7 +308,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time",
+          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"Unique Users Count\"\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)",
           "refId": "A",
           "sql": {
             "columns": [
@@ -335,12 +326,12 @@
               }
             ],
             "limit": 50
-          },
-          "table": "usage_stats"
+          }
         }
       ],
-      "title": "Unique Users",
-      "type": "barchart"
+      "title": "Unique Users Total",
+      "transparent": true,
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -395,7 +386,7 @@
         "h": 11,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 10
       },
       "id": 1,
       "interval": "5m",
@@ -487,11 +478,136 @@
         "type": "mysql",
         "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
       },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 3,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "dataset": "wine",
+          "datasource": {
+            "type": "mysql",
+            "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  COUNT(DISTINCT user_id) AS \"count\",\n  $__timeGroup(session_start,'5m', 0) as time\nFROM\n  wine.usage_stats\nWHERE\n  $__timeFilter(session_start)\nGROUP BY\n  time",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          },
+          "table": "usage_stats"
+        }
+      ],
+      "title": "Unique Users",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 9,
+      "panels": [],
+      "title": "Raw Data",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "mysql",
+        "uid": "d3a102d9-4572-492f-a3f2-d6de0940187c"
+      },
       "gridPos": {
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 28
       },
       "id": 4,
       "options": {
@@ -578,7 +694,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "id": 2,
       "options": {
@@ -593,7 +709,7 @@
         },
         "showHeader": true
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "10.3.3",
       "targets": [
         {
           "dataset": "wine",
