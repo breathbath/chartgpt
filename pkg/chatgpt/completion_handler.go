@@ -486,10 +486,10 @@ func (h *ChatCompletionHandler) feedbackMessage(
 
 	currentTime := time.Now()
 
-	timeDiff := currentTime.Sub(userLike.CreatedAt)
+	timeDiff := currentTime.Sub(userLike.UpdatedAt)
 	days := int(timeDiff.Hours() / 24)
 	// Check if the number of days is a multiple of seven
-	if days%7 == 0 {
+	if days > 0 && days%7 == 0 {
 		return h.createFeedbackResponse(ctx, recommendStats), nil
 	}
 
@@ -545,6 +545,12 @@ func (h *ChatCompletionHandler) processToolCall(
 			if err != nil {
 				return responseMessage, err
 			}
+
+			err = h.enrichFilter(ctx, wineFilter)
+			if err != nil {
+				return responseMessage, err
+			}
+
 			recommendStats.FunctionCall = string(toolCall.Function.Arguments)
 
 			dialogAction, err := h.dialogHandler.DecideAction(ctx, wineFilter, req.Sender.GetID())
@@ -581,23 +587,24 @@ func (h *ChatCompletionHandler) processToolCall(
 	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
 }
 
-func (h *ChatCompletionHandler) promptPreviouslyLikedWines(
-	ctx context.Context,
-	req *msg.Request,
-) (responseMessage *msg.ResponseMessage, err error) {
-	respMessage, err := h.GenerateResponse(
-		ctx,
-		SystemMessage,
-		PreviouslyLikedWines+req.Sender.String(),
-		"previous_likes_prompt",
-		req,
-	)
-	if err != nil {
-		return nil, err
+func (h *ChatCompletionHandler) enrichFilter(ctx context.Context, f *recommend.WineFilter) error {
+	log := logging.WithContext(ctx)
+	if f.Region != "" && f.Country == "" {
+		log.Debugf("going to find country by region %q", f.Region)
+		c, err := recommend.FindCountryByRegion(h.dbConn, f.Region)
+		if err != nil {
+			return err
+		}
+
+		if c != "" {
+			log.Debugf("found country %q by region %q", c, f.Region)
+		} else {
+			log.Debugf("didn't find any country by region %q", f.Region)
+		}
+		f.Country = c
 	}
-	return &msg.ResponseMessage{
-		Message: respMessage,
-	}, nil
+
+	return nil
 }
 
 func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
