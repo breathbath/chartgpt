@@ -183,7 +183,7 @@ func (afh *ListFavoritesHandler) Handle(ctx context.Context, req *msg.Request) (
 		return afh.handleErrorCase(ctx)
 	}
 
-	log.Debugf("Found %d favorites for user %q", req.Sender.UserName)
+	log.Debugf("Found %d favorites for user %q", len(wineFavorites), req.Sender.UserName)
 
 	return afh.handleSuccessCase(ctx, req, wineFavorites)
 }

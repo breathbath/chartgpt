@@ -5,7 +5,6 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"strings"
 )
 
@@ -30,100 +29,131 @@ func (wp *WineProvider) FindByCriteria(
 	f *WineFilter,
 	recommendStats *monitoring.Recommendation,
 ) (found bool, w Wine, err error) {
-	query := wp.conn.Model(&Wine{})
+	where := []string{
+		"`deleted_at` IS NULL",
+	}
+	whereParams := []interface{}{}
+	orderParams := []interface{}{}
+	order := []string{}
+	q := "SELECT * FROM wines WHERE %where% ORDER BY %order% LIMIT 1"
 
 	if f.Color != "" {
-		query.Where("color = ?", f.Color)
+		where = append(where, "AND color = ?")
+		whereParams = append(whereParams, f.Color)
 	}
 
 	if f.Country != "" {
-		query.Where("country = ?", f.Country)
+		where = append(where, "AND country = ?")
+		whereParams = append(whereParams, f.Country)
 	}
 
 	if f.Sugar != "" {
-		query.Where("sugar = ?", f.Sugar)
+		where = append(where, "AND sugar = ?")
+		whereParams = append(whereParams, f.Sugar)
 	}
 
 	if f.Body != "" {
 		if f.Body != "полнотелое" {
-			query.Where("body != ?", "полнотелое")
+			where = append(where, "AND body != ?")
+			whereParams = append(whereParams, "полнотелое")
 		} else {
-			query.Where("body = ?", f.Body)
+			where = append(where, "AND body = ?")
+			whereParams = append(whereParams, f.Body)
 		}
 	}
 
 	if f.Type != "" {
-		query.Where("type = ?", f.Type)
+		where = append(where, "AND type = ?")
+		whereParams = append(whereParams, f.Type)
 	} else {
-		query.Where("type = ?", DefaultWineType)
+		where = append(where, "AND type = ?")
+		whereParams = append(whereParams, DefaultWineType)
 	}
 
 	if f.Region != "" {
-		query.Where("region LIKE ?", "%"+f.Region+"%")
+		where = append(where, "AND region LIKE ?")
+		whereParams = append(whereParams, "%"+f.Region+"%")
 	}
 
 	if f.Grape != "" {
-		query.Where("grape LIKE ?", "%"+f.Grape+"%")
+		where = append(where, "AND grape LIKE ?")
+		whereParams = append(whereParams, "%"+f.Grape+"%")
 	}
 
 	if f.Year > 0 {
-		query.Where("year = ?", f.Year)
+		where = append(where, "AND year = ?")
+		whereParams = append(whereParams, f.Year)
 	}
 
 	if f.PriceRange.IsEmpty() {
-		query.Where("price >= ?", DefaultPriceRangeFrom)
-		query.Where("price <= ?", DefaultPriceRangeTo)
+		order = append(order, "CASE WHEN price BETWEEN ? AND ? THEN 0 ELSE 1 END")
+		orderParams = append(orderParams, DefaultPriceRangeFrom)
+		orderParams = append(orderParams, DefaultPriceRangeTo)
 	} else {
 		if f.PriceRange.From > 0 {
-			query.Where("price >= ?", f.PriceRange.From)
+			where = append(where, "AND price >= ?")
+			whereParams = append(whereParams, f.PriceRange.From)
 		}
 		if f.PriceRange.To > 0 {
-			query.Where("price <= ?", f.PriceRange.To)
+			where = append(where, "AND price <= ?")
+			whereParams = append(whereParams, f.PriceRange.To)
 		}
 	}
 
 	if !f.AlcoholPercentage.IsEmpty() {
 		if f.AlcoholPercentage.From > 0 {
-			query.Where("alcohol_percentage >= ?", f.AlcoholPercentage.From)
+			where = append(where, "AND alcohol_percentage >= ?")
+			whereParams = append(whereParams, f.AlcoholPercentage.From)
 		}
 		if f.AlcoholPercentage.To > 0 {
-			query.Where("alcohol_percentage <= ?", f.AlcoholPercentage.To)
+			where = append(where, "AND alcohol_percentage <= ?")
+			whereParams = append(whereParams, f.AlcoholPercentage.To)
 		}
 	}
 
 	if len(f.Style) > 0 {
 		for i := range f.Style {
-			query.Where("style LIKE ?", "%"+f.Style[i]+"%")
+			where = append(where, "AND style LIKE ?")
+			whereParams = append(whereParams, "%"+f.Style[i]+"%")
 		}
 	}
 
 	if f.Name != "" {
-		query.Where("MATCH(name, real_name) AGAINST (?)", f.Name)
-		query.Clauses(clause.OrderBy{
-			Expression: clause.Expr{SQL: `MATCH(name, real_name) AGAINST(?) DESC, RAND()`, Vars: []interface{}{f.Name}},
-		})
+		where = append(where, "AND MATCH(name, real_name) AGAINST (?)")
+		whereParams = append(whereParams, f.Name)
+		order = append(order, "MATCH(name, real_name) AGAINST(?) DESC")
+		orderParams = append(orderParams, f.Name)
 	}
 
-	if f.Name == "" {
-		query.Order("RAND()").Order("photo DESC")
+	if f.Taste != "" {
+		where = append(where, "AND MATCH(smell_description, taste_description) AGAINST (?)")
+		whereParams = append(whereParams, f.Taste)
+		order = append(order, "MATCH(smell_description, taste_description) AGAINST(?) DESC")
+		orderParams = append(orderParams, f.Taste)
 	}
+	order = append(order, "RAND()", "photo DESC")
 
 	if len(f.MatchingDishes) > 0 {
 		dishes := strings.Join(f.MatchingDishes, " ")
-		query.Where("MATCH(recommend) AGAINST (?)", dishes)
-		query.Clauses(clause.OrderBy{
-			Expression: clause.Expr{SQL: `MATCH(recommend) AGAINST(?) DESC, RAND()`, Vars: []interface{}{dishes}},
-		})
+		where = append(where, "AND MATCH(recommend) AGAINST (?)")
+		whereParams = append(whereParams, dishes)
+
+		order = append(order, `MATCH(recommend) AGAINST(?) DESC, RAND()`)
+		orderParams = append(orderParams, dishes)
 	}
 
 	var wine Wine
 
-	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
-		return tx.Take(&wine)
-	})
-	recommendStats.DBQuery = sql
+	q = strings.ReplaceAll(q, "%where%", strings.Join(where, " "))
+	q = strings.ReplaceAll(q, "%order%", strings.Join(order, ", "))
 
-	res := query.Take(&wine)
+	allParams := []interface{}{}
+	allParams = append(allParams, whereParams...)
+	allParams = append(allParams, orderParams...)
+
+	res := wp.conn.Raw(q, allParams...).First(&wine)
+
+	recommendStats.DBQuery = wp.conn.Dialector.Explain(q, allParams...)
 
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return false, w, nil

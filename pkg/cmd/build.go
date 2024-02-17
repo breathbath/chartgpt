@@ -4,10 +4,12 @@ import (
 	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/chatgpt"
 	"breathbathChatGPT/pkg/help"
+	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
+	"context"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +59,9 @@ func BuildMessageRouter(
 	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, cacheClient, loader, isScopedModeFunc, isAdminDetector)
 
 	wineProvider := recommend.NewWineProvider(dbConn)
+	wineProvider.FindByCriteria(context.Background(), &recommend.WineFilter{
+		Body: "lala",
+	}, &monitoring.Recommendation{})
 
 	dialogHandler := recommend.NewDialogHandler(dbConn)
 

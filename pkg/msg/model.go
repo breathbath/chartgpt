@@ -19,7 +19,7 @@ func (s *Sender) GetID() string {
 		return ""
 	}
 
-	return s.ID
+	return s.UserName
 }
 
 func (s *Sender) String() string {

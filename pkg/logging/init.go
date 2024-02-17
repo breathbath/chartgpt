@@ -10,6 +10,18 @@ type loggingContextKey string
 
 const TrackingIDKey loggingContextKey = "trackingID"
 
+type TrackingIDModel struct {
+	TrackingID string `gorm:"size:255"`
+}
+
+func (tim *TrackingIDModel) SetTrackingID(ctx context.Context) {
+	trackingIdI := ctx.Value(TrackingIDKey)
+	if trackingIdI == nil {
+		return
+	}
+	tim.TrackingID = trackingIdI.(string)
+}
+
 func WithTrackingId(ctx context.Context) context.Context {
 	trackingID := uuid.New().String()
 	ctxWithTrackingId := context.WithValue(ctx, TrackingIDKey, trackingID)

@@ -322,6 +322,9 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 				"название": map[string]interface{}{
 					"type": "string",
 				},
+				"вкус и аромат": map[string]interface{}{
+					"type": "string",
+				},
 				"страна": map[string]interface{}{
 					"type": "string",
 				},
@@ -339,7 +342,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 					"type": "array",
 					"items": map[string]interface{}{
 						"type": "string",
-						"enum": []string{"минеральные", "травянистые", "пряные", "пикантные", "ароматные", "фруктовые", "освежающие", "десертные", "выдержанные", "бархатистые"},
+						"enum": recommend.StylesEnaum,
 					},
 				},
 				"цена": map[string]interface{}{
@@ -451,7 +454,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}
 
 	var userLike recommend.Like
-	res := h.dbConn.First(&userLike, "user_login = ?", req.Sender.GetID())
+	res := h.dbConn.First(&userLike, "user_login = ?", req.Sender.UserName)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			delayedOptions := &msg.Options{}
@@ -630,6 +633,10 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 
 	if val, ok := argumentsMap["название"]; ok {
 		wineFilter.Name = fmt.Sprint(val)
+	}
+
+	if val, ok := argumentsMap["вкус и аромат"]; ok {
+		wineFilter.Taste = fmt.Sprint(val)
 	}
 
 	wineFilter.PriceRange = utils.ParseRangeFloat(argumentsMap, "цена")

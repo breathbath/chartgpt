@@ -9,24 +9,16 @@ import (
 
 type Recommendation struct {
 	gorm.Model
-	TrackingID             string
-	UserID                 string `gorm:"size:255"`
-	FunctionCall           string
-	DBQuery                string
-	UserPrompt             string
-	RecommendedWineSummary string
-	RecommendedWineID      string
-	RecommendationText     string
-	RawModelInput          string
-	RawModelOutput         string
-}
-
-func (r *Recommendation) SetTrackingID(ctx context.Context) {
-	trackingIdI := ctx.Value(logging.TrackingIDKey)
-	if trackingIdI == nil {
-		return
-	}
-	r.TrackingID = trackingIdI.(string)
+	logging.TrackingIDModel `gorm:"embedded"`
+	UserID                  string `gorm:"size:255"`
+	FunctionCall            string
+	DBQuery                 string
+	UserPrompt              string
+	RecommendedWineSummary  string
+	RecommendedWineID       string
+	RecommendationText      string
+	RawModelInput           string
+	RawModelOutput          string
 }
 
 func (r *Recommendation) Save(ctx context.Context, db *gorm.DB) {
