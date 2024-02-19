@@ -142,7 +142,7 @@ func (um UserMiddleware) Handle(ctx context.Context, req *msg.Request) (*msg.Res
 	}
 
 	if userID == "" {
-		return nil, errors.New("unknown message sender id")
+		return nil, nil
 	}
 
 	u, err := um.us.ReadUserFromStorage(ctx, platform, userID)
