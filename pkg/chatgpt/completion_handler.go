@@ -454,7 +454,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		},
 	}
 
-	feedbackMessage, err := h.feedbackMessage(ctx, req, recommendStats)
+	feedbackMessage, err := h.feedbackMessage(ctx, req)
 	if err != nil {
 		log.Errorf("failed to generate feedback message: %v", err)
 	} else {
@@ -471,7 +471,6 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 func (h *ChatCompletionHandler) feedbackMessage(
 	ctx context.Context,
 	req *msg.Request,
-	recommendStats *monitoring.Recommendation,
 ) (*msg.ResponseMessage, error) {
 	log := logging.WithContext(ctx)
 
@@ -480,7 +479,7 @@ func (h *ChatCompletionHandler) feedbackMessage(
 
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return h.createFeedbackResponse(ctx, recommendStats), nil
+			return h.createFeedbackResponse(ctx), nil
 		}
 		return nil, res.Error
 	}
@@ -491,7 +490,7 @@ func (h *ChatCompletionHandler) feedbackMessage(
 	days := int(timeDiff.Hours() / 24)
 	// Check if the number of days is a multiple of seven
 	if days > 0 && days%7 == 0 {
-		return h.createFeedbackResponse(ctx, recommendStats), nil
+		return h.createFeedbackResponse(ctx), nil
 	}
 
 	log.Debug("Skipping delayed like message since user already left a like before")
@@ -500,18 +499,17 @@ func (h *ChatCompletionHandler) feedbackMessage(
 
 func (h *ChatCompletionHandler) createFeedbackResponse(
 	ctx context.Context,
-	recommendStats *monitoring.Recommendation,
 ) *msg.ResponseMessage {
 	delayedOptions := &msg.Options{}
 	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "❤️ " + "Нравится",
 		Type: msg.PredefinedResponseInline,
-		Data: fmt.Sprintf("%s %d", recommend.LikeCommand, recommendStats.ID),
+		Data: fmt.Sprintf("%s", recommend.LikeCommand),
 	})
 	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "🗣️️ " + "Отзыв",
 		Type: msg.PredefinedResponseInline,
-		Data: fmt.Sprintf("%s %d", recommend.DisLikeCommand, recommendStats.ID),
+		Data: fmt.Sprintf("%s", recommend.DisLikeCommand),
 		Link: "https://t.me/ai_winechef",
 	})
 	return &msg.ResponseMessage{
