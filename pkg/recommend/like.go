@@ -1,7 +1,6 @@
 package recommend
 
 import (
-	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/utils"
 	"context"
@@ -28,11 +27,9 @@ var FallbackResponseMessages = []string{
 
 type Like struct {
 	gorm.Model
-	LikeType         string
-	LikeValue        string
-	UserLogin        string
-	RecommendationID *uint
-	Recommendation   *monitoring.Recommendation `gorm:"constraint:OnDelete:SET NULL;"`
+	LikeType  string
+	LikeValue string
+	UserLogin string
 }
 
 type LikeHandler struct {
@@ -82,14 +79,11 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 	}
 
 	userResponseMessages := []string{}
-	recommendationId := ""
 	if utils.MatchesCommand(req.Message, LikeCommand) {
 		like.LikeValue = "like"
-		recommendationId = utils.ExtractCommandValue(req.Message, LikeCommand)
 		userResponseMessages = append(userResponseMessages, "Оценка: понравилось")
 	} else if utils.MatchesCommand(req.Message, DisLikeCommand) {
 		like.LikeValue = "dislike"
-		recommendationId = utils.ExtractCommandValue(req.Message, DisLikeCommand)
 		userResponseMessages = append(userResponseMessages, "Оценка: не понравилось")
 	}
 
@@ -100,19 +94,6 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 
 	like.UserLogin = req.Sender.UserName
 
-	var reco *monitoring.Recommendation
-
-	if recommendationId != "" {
-		log.Debugf("Going to find recommendation tracking for recommendation %s", recommendationId)
-		reco = &monitoring.Recommendation{}
-		res := lh.db.First(reco, recommendationId)
-		if err := res.Error; err != nil {
-			log.Errorf("failed to query recommendation %s: %v", recommendationId, err)
-		} else {
-			like.Recommendation = reco
-		}
-	}
-
 	if req.Sender.FirstName != "" {
 		userResponseMessages = append(userResponseMessages, "Имя пользователя: "+req.Sender.FirstName)
 	}
@@ -122,9 +103,6 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 
 	query := lh.db.Model(&Like{})
 	lh.db.Where("user_login=?", like.UserLogin)
-	if like.Recommendation != nil {
-		lh.db.Where("recommendation_id=?", like.Recommendation.ID)
-	}
 
 	var existingLike Like
 	res := query.Take(&existingLike)
