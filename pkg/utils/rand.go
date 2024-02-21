@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-func GetRandomItems(inputItems []string) []string {
-	numItems := rand.Intn(len(inputItems)) + 1
+func GetRandomItems(inputItems []string, numItems int) []string {
 	randomItems := make(map[string]bool)
 	for len(randomItems) < numItems {
 		// Get a random index

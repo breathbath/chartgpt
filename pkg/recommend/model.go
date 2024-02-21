@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type Wine struct {
@@ -92,7 +91,7 @@ var StylesEnaum = []string{"минеральные", "травянистые", "
 
 func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 	filterNames := []string{}
-	if wf.Color == "" {
+	if wf.Color == "" && wf.Grape == "" {
 		filterNames = append(filterNames, "цвет")
 	}
 
@@ -109,7 +108,7 @@ func (wf WineFilter) GetEmptyPrimaryFilters() []string {
 
 func (wf WineFilter) GetRandomSecondaryFilters() []string {
 	emptyFilters := wf.GetEmptySecondaryFilters()
-	return utils.GetRandomItems(emptyFilters)
+	return utils.GetRandomItems(emptyFilters, 2)
 }
 
 func (wf WineFilter) GetEmptySecondaryFilters() []string {
@@ -118,24 +117,16 @@ func (wf WineFilter) GetEmptySecondaryFilters() []string {
 		filterNames = append(filterNames, "виноград")
 	}
 
-	if len(wf.Style) == 0 {
-		filterNames = append(filterNames, "стиль: "+strings.Join(StylesEnaum, ","))
-	}
-
 	if wf.Body == "" {
 		filterNames = append(filterNames, "тело")
 	}
 
 	if wf.Taste == "" {
-		filterNames = append(filterNames, "тело")
+		filterNames = append(filterNames, "вкус и аромат")
 	}
 
 	if len(wf.MatchingDishes) == 0 {
 		filterNames = append(filterNames, "подходящие блюда")
-	}
-
-	if wf.AlcoholPercentage.IsEmpty() {
-		filterNames = append(filterNames, "крепость")
 	}
 
 	return filterNames
@@ -144,7 +135,7 @@ func (wf WineFilter) GetEmptySecondaryFilters() []string {
 func (wf WineFilter) GetPrimaryFiltersCount() int {
 	count := 0
 
-	if wf.Color != "" {
+	if wf.Color != "" && wf.Grape == "" {
 		count++
 	}
 
@@ -164,7 +155,7 @@ func (wf WineFilter) GetTotalPrimaryFiltersCount() int {
 }
 
 func (wf WineFilter) HasSecondaryFilters() bool {
-	return wf.Grape != "" || len(wf.Style) != 0 || wf.Taste != "" || wf.Body != "" || len(wf.MatchingDishes) > 0 || !wf.AlcoholPercentage.IsEmpty()
+	return wf.Grape != "" || wf.Taste != "" || wf.Body != "" || len(wf.MatchingDishes) > 0
 }
 
 func (wf WineFilter) HasExpertFilters() bool {

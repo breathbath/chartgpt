@@ -51,6 +51,22 @@ var botLikeTexts = []string{
 	"Хей! Просто хотел напомнить тебе о возможности оценить мою работу. Если у тебя есть 1 секунда свободного времени, пожалуйста, нажми на одну из кнопок ниже. Спасибо большое!",
 }
 
+var missingFilterSystemMessages = map[string]string{
+	"цвет":             "запроси информацию о желаемом цвете вина",
+	"год":              "укажите год изготовления интересуемого вина",
+	"сахар":            "интересует ли вас сухое или полусухое вино",
+	"крепость":         "крепкое или легкое вино",
+	"подходящие блюда": "запроси пример блюд подходящие по вкусу для вина",
+	"тело":             "запроси тело вина как описание ощущения полноты, плотности и вязкости во рту при его потреблении",
+	"вкус и аромат":    "запроси вкусовые или ароматические ассоциации например нужно ли вино со вкусом цитрусовых, ягод, фруктов, цветы",
+	"страна":           "запроси страну где было произведено вино или выращен виноград",
+	"регион":           "запроси регион производства вина",
+	"виноград":         "запроси сорт винограда",
+	"тип":              "запроси вид винного напитка, вино, шампанское, херес, портвейн",
+	"цена":             "запроси ценовую категорию, доступное, премиум, раритеное вино",
+	"":                 "запроси %s",
+}
+
 type ChatCompletionHandler struct {
 	cfg            *Config
 	settingsLoader *Loader
@@ -563,10 +579,19 @@ func (h *ChatCompletionHandler) processToolCall(
 
 			filters := dialogAction.GetFilters()
 			if len(filters) > 0 {
+				filterPrompts := []string{}
+				for _, filterName := range filters {
+					filterPrompt, ok := missingFilterSystemMessages[filterName]
+					if ok {
+						filterPrompts = append(filterPrompts, filterPrompt)
+					} else {
+						filterPrompts = append(filterPrompts, fmt.Sprintf(missingFilterSystemMessages[""], filterName))
+					}
+				}
 				respMessage, err := h.GenerateResponse(
 					ctx,
 					SystemMessage,
-					fmt.Sprintf(PromptFiltersMessage, strings.Join(filters, ", ")),
+					fmt.Sprintf(PromptFiltersMessage, strings.Join(filterPrompts, ". ")),
 					"recommendation_filters_prompt",
 					req,
 				)
