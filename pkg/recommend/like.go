@@ -101,11 +101,9 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 		userResponseMessages = append(userResponseMessages, "Фамилия: "+req.Sender.LastName)
 	}
 
-	query := lh.db.Model(&Like{})
-	lh.db.Where("user_login=?", like.UserLogin)
-
 	var existingLike Like
-	res := query.Take(&existingLike)
+	query := lh.db.Model(&Like{})
+	res := query.Where("user_login=?", like.UserLogin).Take(&existingLike)
 	if res.Error == nil {
 		res := lh.db.Model(&Like{}).Where("id=?", existingLike.ID).Update("updated_at", time.Now().UTC())
 		if err := res.Error; err != nil {

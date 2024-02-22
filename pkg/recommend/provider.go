@@ -63,8 +63,8 @@ func (wp *WineProvider) FindByCriteria(
 	}
 
 	if f.Type != "" {
-		where = append(where, "AND type = ?")
-		whereParams = append(whereParams, f.Type)
+		where = append(where, "AND type LIKE ?")
+		whereParams = append(whereParams, "%"+f.Type+"%")
 	} else {
 		where = append(where, "AND type = ?")
 		whereParams = append(whereParams, DefaultWineType)
