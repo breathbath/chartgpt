@@ -535,7 +535,7 @@ func (h *ChatCompletionHandler) createFeedbackResponse(
 		Type:    msg.Success,
 		Options: delayedOptions,
 		DelayedOptions: &msg.DelayedOptions{
-			Timeout: time.Second * 30,
+			Timeout: time.Second * 60,
 			Ctx:     ctx,
 		},
 	}
