@@ -69,6 +69,7 @@ type WineTextualSummary struct {
 	Style             string  `json:"Стиль"`
 	Recommend         string  `json:"Рекомендованные блюда"`
 	Type              string  `json:"Тип напитка"`
+	Price             float64 `json:"Прайс в рублях"`
 }
 
 type WineFilter struct {
@@ -220,6 +221,7 @@ func (w Wine) WineTextualSummary() WineTextualSummary {
 		Style:             w.Style,
 		Recommend:         w.Recommend,
 		Type:              w.Type,
+		Price:             w.Price,
 	}
 }
 
