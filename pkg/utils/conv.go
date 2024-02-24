@@ -163,6 +163,18 @@ func ParseEnumStr(rawVal interface{}, enums []string) string {
 	return ""
 }
 
+func ParseStr(rawVal interface{}) string {
+	if rawVal == nil {
+		return ""
+	}
+
+	if rawStr, ok := rawVal.(string); ok {
+		return rawStr
+	}
+
+	return fmt.Sprint(rawVal)
+}
+
 func ParseStrings(rawValues []interface{}) []string {
 	result := make([]string, 0, len(rawValues))
 	for _, val := range rawValues {
