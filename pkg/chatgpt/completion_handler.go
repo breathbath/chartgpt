@@ -558,8 +558,6 @@ func (h *ChatCompletionHandler) processToolCall(
 	for i := range choice.Message.ToolCalls {
 		toolCall := choice.Message.ToolCalls[i]
 		if toolCall.Function.Name == "find_wine" {
-			//toolCall.Function.Arguments = json.RawMessage(`{\"цвет\":\"Красное\",\"сахар\":\"сухое\",\"стиль\":\"фруктовые, пряные\",\"страна\":null,\"регион\": null}`)
-			toolCall.Function.Arguments = json.RawMessage(`"{\n  \"сорт винограда\": \"Мерло\",\"страна\":null\n}"`)
 			wineFilter, err := h.parseFilter(ctx, toolCall.Function.Arguments)
 			if err != nil {
 				return responseMessage, err
