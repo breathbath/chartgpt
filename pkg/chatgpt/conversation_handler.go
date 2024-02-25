@@ -34,7 +34,7 @@ func NewSetConversationContextCommand(
 ) *SetConversationContextHandler {
 	return &SetConversationContextHandler{
 		db:            db,
-		command:       "/context",
+		command:       "/setsm",
 		isScopedMode:  isScopedMode,
 		adminDetector: adminDetector,
 	}
@@ -60,10 +60,6 @@ func getConversationContextKey(req *msg.Request) string {
 	return storage.GenerateCacheKey(conversationVersion, "chatgpt", "conversation_context", req.GetConversationID())
 }
 
-func getGlobalConversationContextKey() string {
-	return storage.GenerateCacheKey(conversationVersion, "chatgpt", "conversation_context_glob")
-}
-
 func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
@@ -86,43 +82,8 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 		CreatedAtTimestamp: time.Now().Unix(),
 	}
 
-	if sc.isScopedMode() && sc.adminDetector(req) {
-		conversationContextKey := getGlobalConversationContextKey()
-		err := sc.db.Save(ctx, conversationContextKey, conversationContext, 0)
-		if err != nil {
-			return nil, err
-		}
-		return &msg.Response{
-			Messages: []msg.ResponseMessage{
-				{
-					Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
-					Type:    msg.Success,
-				},
-			},
-		}, nil
-	}
-
 	conversationContextKey := getConversationContextKey(req)
-	err := sc.db.Save(ctx, conversationContextKey, conversationContext, defaultConversationValidity)
-	if err != nil {
-		return nil, err
-	}
-
-	cacheKey := getConversationKey(req)
-	conversation := new(Conversation)
-	found, err := sc.db.Load(ctx, cacheKey, conversation)
-	if err != nil {
-		return nil, err
-	}
-
-	if found {
-		conversation.Messages = []ConversationMessage{}
-	}
-
-	log.Debugf("Going to save conversation context: %q", conversationContextText)
-	conversation.ID = req.GetConversationID()
-
-	err = sc.db.Save(ctx, cacheKey, conversation, defaultConversationValidity)
+	err := sc.db.Save(ctx, conversationContextKey, conversationContext, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +93,7 @@ func (sc *SetConversationContextHandler) Handle(ctx context.Context, req *msg.Re
 	return &msg.Response{
 		Messages: []msg.ResponseMessage{
 			{
-				Message: fmt.Sprintf("Remembered conversation context %q", conversationContextText),
+				Message: fmt.Sprintf("Saved system message %q", conversationContextText),
 				Type:    msg.Success,
 			},
 		},
@@ -148,32 +109,119 @@ func (sc *SetConversationContextHandler) GetHelp(context.Context, *msg.Request) 
 	return help.Result{Text: text}
 }
 
-type ResetConversationHandler struct {
-	command       string
+type GetConversationContextHandler struct {
 	db            storage.Client
-	modeDetector  func() bool
+	command       string
 	adminDetector func(req *msg.Request) bool
+}
+
+func NewGetConversationContextCommand(
+	db storage.Client,
+	adminDetector func(req *msg.Request) bool,
+) *GetConversationContextHandler {
+	return &GetConversationContextHandler{
+		db:            db,
+		command:       "/getsm",
+		adminDetector: adminDetector,
+	}
+}
+
+func (sc *GetConversationContextHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
+	if !strings.HasPrefix(req.Message, sc.command) {
+		return false, nil
+	}
+
+	if !sc.adminDetector(req) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (sc *GetConversationContextHandler) GetConversationContext(ctx context.Context, req *msg.Request) (*Context, error) {
+	log := logrus.WithContext(ctx)
+
+	log.Debug("will get conversation context")
+	conversationContextKey := getConversationContextKey(req)
+	conversationContext := &Context{}
+	found, err := sc.db.Load(ctx, conversationContextKey, conversationContext)
+	if err != nil {
+		return conversationContext, err
+	}
+
+	if found {
+		log.Debugf("got overriding context %q under %q", conversationContext.Message, conversationContextKey)
+		return conversationContext, nil
+	}
+
+	log.Debugf("using default context %q", SystemMessage)
+
+	conversationContext.Message = SystemMessage
+	conversationContext.CreatedAtTimestamp = time.Now().UTC().Unix()
+
+	return conversationContext, nil
+}
+
+func (sc *GetConversationContextHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
+	log := logrus.WithContext(ctx)
+
+	log.Debug("will get conversation context")
+
+	messages := []string{
+		fmt.Sprintf("GLOBAL SYSTEM MESSAGE:\n%s", SystemMessage),
+	}
+	overridingConversationContext, err := sc.GetConversationContext(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	overriddingContext := overridingConversationContext.GetMessage()
+	if overriddingContext != SystemMessage {
+		messages = append(messages, fmt.Sprintf("OVERRIDDING SYSTEM MESSAGE:\n%s", overriddingContext))
+	}
+	log.Debugf("Got conversation contexts: %+v", messages)
+
+	return &msg.Response{
+		Messages: []msg.ResponseMessage{
+			{
+				Message: strings.Join(messages, "\n"),
+				Type:    msg.Success,
+			},
+		},
+	}, nil
+}
+
+func (sc *GetConversationContextHandler) GetHelp(context.Context, *msg.Request) help.Result {
+	text := fmt.Sprintf(
+		"%s: to get context for the current conversation (global and Overridding)",
+		sc.command,
+	)
+
+	return help.Result{Text: text}
+}
+
+type ResetConversationHandler struct {
+	command          string
+	db               storage.Client
+	isScopedModeFunc func() bool
+	adminDetector    func(req *msg.Request) bool
 }
 
 func NewResetConversationHandler(
 	db storage.Client,
-	modeDetector func() bool,
+	isScopedModeFunc func() bool,
 	adminDetector func(req *msg.Request) bool,
 ) *ResetConversationHandler {
 	return &ResetConversationHandler{
-		command:       "/reset",
-		db:            db,
-		modeDetector:  modeDetector,
-		adminDetector: adminDetector,
+		command:          "/reset",
+		db:               db,
+		isScopedModeFunc: isScopedModeFunc,
+		adminDetector:    adminDetector,
 	}
 }
 
 func (sc *ResetConversationHandler) CanHandle(_ context.Context, req *msg.Request) (bool, error) {
 	if !utils.MatchesCommand(req.Message, sc.command) {
-		return false, nil
-	}
-
-	if sc.modeDetector() && !sc.adminDetector(req) {
 		return false, nil
 	}
 
@@ -183,37 +231,26 @@ func (sc *ResetConversationHandler) CanHandle(_ context.Context, req *msg.Reques
 func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Response, error) {
 	log := logrus.WithContext(ctx)
 
-	log.Debug("will reset conversation")
-
-	cacheKey := getConversationKey(req)
-	err := sc.db.Delete(ctx, cacheKey)
+	conversationKey := getConversationKey(req)
+	err := sc.db.Delete(ctx, conversationKey)
 	if err != nil {
 		return nil, err
 	}
 
-	if !sc.modeDetector() {
-		conversationContextKey := getGlobalConversationContextKey()
+	log.Debugf("deleted conversation under %q", conversationKey)
+	if sc.adminDetector(req) {
+		conversationContextKey := getConversationContextKey(req)
 		err := sc.db.Delete(ctx, conversationContextKey)
 		if err != nil {
 			return nil, err
 		}
-
-		return &msg.Response{
-			Messages: []msg.ResponseMessage{
-				{
-					Message: "Successfully reset your current conversation",
-					Type:    msg.Success,
-				},
-			},
-		}, nil
+		log.Debugf("deleted conversation context under %q", conversationContextKey)
 	}
-
-	log.Debug("successfully reset conversation")
 
 	return &msg.Response{
 		Messages: []msg.ResponseMessage{
 			{
-				Message: "Successfully reset your current conversation",
+				Message: "Reset success",
 				Type:    msg.Success,
 			},
 		},
@@ -221,7 +258,7 @@ func (sc *ResetConversationHandler) Handle(ctx context.Context, req *msg.Request
 }
 
 func (sc *ResetConversationHandler) GetHelp(context.Context, *msg.Request) help.Result {
-	text := fmt.Sprintf("%s: to reset your conversation", sc.command)
+	text := fmt.Sprintf("%s: to reset your conversation history", sc.command)
 
 	return help.Result{Text: text}
 }

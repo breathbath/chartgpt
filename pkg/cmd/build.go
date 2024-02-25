@@ -4,12 +4,10 @@ import (
 	"breathbathChatGPT/pkg/auth"
 	"breathbathChatGPT/pkg/chatgpt"
 	"breathbathChatGPT/pkg/help"
-	"breathbathChatGPT/pkg/monitoring"
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
-	"context"
 	"gorm.io/gorm"
 )
 
@@ -45,6 +43,7 @@ func BuildMessageRouter(
 	}
 
 	setConversationCtxHandler := chatgpt.NewSetConversationContextCommand(cacheClient, isScopedModeFunc, isAdminDetector)
+	getConversationCtxHandler := chatgpt.NewGetConversationContextCommand(cacheClient, isAdminDetector)
 	resetConversationHandler := chatgpt.NewResetConversationHandler(cacheClient, isScopedModeFunc, isAdminDetector)
 
 	validationErr := chartGptCfg.Validate()
@@ -59,9 +58,6 @@ func BuildMessageRouter(
 	getModelsHandler := chatgpt.NewGetModelsCommand(chartGptCfg, cacheClient, loader, isScopedModeFunc, isAdminDetector)
 
 	wineProvider := recommend.NewWineProvider(dbConn)
-	wineProvider.FindByCriteria(context.Background(), &recommend.WineFilter{
-		Body: "lala",
-	}, &monitoring.Recommendation{})
 
 	dialogHandler := recommend.NewDialogHandler(dbConn)
 
@@ -73,6 +69,7 @@ func BuildMessageRouter(
 		wineProvider,
 		dbConn,
 		dialogHandler,
+		getConversationCtxHandler,
 	)
 	if err != nil {
 		return nil, err
@@ -85,6 +82,7 @@ func BuildMessageRouter(
 	helpProviders := []help.Provider{
 		setModelHandler,
 		setConversationCtxHandler,
+		getConversationCtxHandler,
 		getModelsHandler,
 		resetConversationHandler,
 		addUserHandler,
@@ -109,6 +107,7 @@ func BuildMessageRouter(
 			listFavorites,
 			delFromFavorites,
 			setConversationCtxHandler,
+			getConversationCtxHandler,
 			resetConversationHandler,
 			setModelHandler,
 			getModelsHandler,
