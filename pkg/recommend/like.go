@@ -120,7 +120,7 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 		log.Errorf("failed to find like from user %q: %v", req.Sender.UserName, res.Error)
 	}
 
-	responseMessage, err := lh.respGen.GenerateResponse(
+	responseMessage, err := lh.respGen.Generate(
 		ctx,
 		LikeContextMessage,
 		strings.Join(userResponseMessages, "."),

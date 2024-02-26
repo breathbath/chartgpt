@@ -48,7 +48,7 @@ var AddToFavoritesErrorMessages = []string{
 }
 
 type ResponseGenerator interface {
-	GenerateResponse(
+	Generate(
 		ctx context.Context,
 		contextMsg,
 		message, typ string,
@@ -116,7 +116,7 @@ func (afh *AddToFavoritesHandler) handleSuccessCase(
 	if alreadyExist {
 		successMsg = AlreadyExistsInFavoritesContextMessage
 	}
-	responseMessage, err := afh.respGen.GenerateResponse(
+	responseMessage, err := afh.respGen.Generate(
 		ctx,
 		successMsg,
 		strings.Join(responseFields, "."),

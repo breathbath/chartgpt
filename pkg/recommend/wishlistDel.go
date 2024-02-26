@@ -97,7 +97,7 @@ func (afh *DeleteFromFavoritesHandler) handleSuccessCase(
 		successMsg = AlreadyDeletedFromFavoritesContextMessage
 	}
 
-	responseMessage, err := afh.respGen.GenerateResponse(
+	responseMessage, err := afh.respGen.Generate(
 		ctx,
 		successMsg,
 		strings.Join(responseFields, "."),

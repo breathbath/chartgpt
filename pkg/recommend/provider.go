@@ -3,7 +3,7 @@ package recommend
 import (
 	"breathbathChatGPT/pkg/monitoring"
 	"context"
-	"github.com/pkg/errors"
+	"fmt"
 	"gorm.io/gorm"
 	"strings"
 )
@@ -28,14 +28,16 @@ func (wp *WineProvider) FindByCriteria(
 	ctx context.Context,
 	f *WineFilter,
 	recommendStats *monitoring.Recommendation,
-) (found bool, w Wine, err error) {
+	limit int,
+) (wines []Wine, err error) {
 	where := []string{
 		"`deleted_at` IS NULL",
 	}
 	whereParams := []interface{}{}
 	orderParams := []interface{}{}
 	order := []string{}
-	q := "SELECT * FROM wines WHERE %where% ORDER BY %order% LIMIT 1"
+	q := "SELECT * FROM wines WHERE $where$ ORDER BY $order$ LIMIT %d"
+	q = fmt.Sprintf(q, limit)
 
 	if f.Color != "" {
 		where = append(where, "AND color = ?")
@@ -142,25 +144,20 @@ func (wp *WineProvider) FindByCriteria(
 		orderParams = append(orderParams, dishes)
 	}
 
-	var wine Wine
-
-	q = strings.ReplaceAll(q, "%where%", strings.Join(where, " "))
-	q = strings.ReplaceAll(q, "%order%", strings.Join(order, ", "))
+	q = strings.ReplaceAll(q, "$where$", strings.Join(where, " "))
+	q = strings.ReplaceAll(q, "$order$", strings.Join(order, ", "))
 
 	allParams := []interface{}{}
 	allParams = append(allParams, whereParams...)
 	allParams = append(allParams, orderParams...)
 
-	res := wp.conn.Raw(q, allParams...).First(&wine)
+	res := wp.conn.Raw(q, allParams...).Find(&wines)
 
 	recommendStats.DBQuery = wp.conn.Dialector.Explain(q, allParams...)
 
-	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		return false, w, nil
-	}
 	if res.Error != nil {
-		return false, w, err
+		return nil, err
 	}
 
-	return true, wine, nil
+	return wines, nil
 }

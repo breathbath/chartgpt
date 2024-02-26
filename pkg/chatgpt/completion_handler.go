@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strconv"
-	"strings"
 	"time"
 
 	"breathbathChatGPT/pkg/msg"
@@ -359,6 +358,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	requestData := map[string]interface{}{
 		"model":    model.GetName(),
 		"messages": conversation.ToRaw(),
+		//"temperature": 0.5,
 		"tools": []map[string]interface{}{
 			{
 				"type":     "function",
@@ -397,40 +397,36 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	usageStats.SessionEnd = time.Now().UTC()
 	usageStats.Save(ctx, h.dbConn)
 
-	messages := make([]string, 0, len(chatResp.Choices))
-	var media *msg.Media
-	var options *msg.Options
+	newMessages := []msg.ResponseMessage{}
 	for i := range chatResp.Choices {
 		choice := chatResp.Choices[i]
 		if choice.FinishReason == "tool_calls" {
-			response, err := h.processToolCall(ctx, choice, &conversation.Messages, req, recommendStats)
+			messages, err := h.processToolCall(ctx, choice, &conversation.Messages, req, recommendStats)
 			if err != nil {
 				return nil, err
 			}
-
-			if response.Message != "" {
-				messages = append(messages, response.Message)
-			}
-			if response.Media != nil {
-				media = response.Media
-			}
-			if response.Options != nil {
-				options = response.Options
+			for _, m := range messages {
+				newMessages = append(newMessages, m)
 			}
 		} else {
 			if choice.Message.Content == "" {
 				continue
 			}
-			messages = append(messages, choice.Message.Content)
-			conversation.Messages = append(conversation.Messages, ConversationMessage{
+			message := ConversationMessage{
 				Role:      RoleAssistant,
 				Text:      choice.Message.Content,
 				CreatedAt: chatResp.CreatedAt,
+			}
+			conversation.Messages = append(conversation.Messages, message)
+
+			newMessages = append(newMessages, msg.ResponseMessage{
+				Message: choice.Message.Content,
+				Type:    msg.Success,
 			})
 		}
 	}
 
-	if len(messages) == 0 {
+	if len(newMessages) == 0 {
 		return &msg.Response{
 			Messages: []msg.ResponseMessage{
 				{
@@ -446,26 +442,17 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		log.Error(err)
 	}
 
-	respMessages := []msg.ResponseMessage{
-		{
-			Message: strings.Join(messages, "/n"),
-			Type:    msg.Success,
-			Media:   media,
-			Options: options,
-		},
-	}
-
 	feedbackMessage, err := h.feedbackMessage(ctx, req)
 	if err != nil {
 		log.Errorf("failed to generate feedback message: %v", err)
 	} else {
 		if feedbackMessage != nil {
-			respMessages = append(respMessages, *feedbackMessage)
+			newMessages = append(newMessages, *feedbackMessage)
 		}
 	}
 
 	return &msg.Response{
-		Messages: respMessages,
+		Messages: newMessages,
 	}, nil
 }
 
@@ -524,18 +511,46 @@ func (h *ChatCompletionHandler) createFeedbackResponse(
 	}
 }
 
+func (h *ChatCompletionHandler) createdSimilarRecommendedWineMessage(
+	ctx context.Context,
+	wineFilter *recommend.WineFilter,
+	alreadyRecommended recommend.Wine,
+) *msg.ResponseMessage {
+	delayedOptions := &msg.Options{}
+	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "❤️ " + "Нравится",
+		Type: msg.PredefinedResponseInline,
+		Data: fmt.Sprintf("%s", recommend.LikeCommand),
+	})
+	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "🗣️️ " + "Отзыв",
+		Type: msg.PredefinedResponseInline,
+		Data: fmt.Sprintf("%s", recommend.DisLikeCommand),
+		Link: "https://t.me/ai_winechef",
+	})
+	return &msg.ResponseMessage{
+		Message: utils.SelectRandomMessage(botLikeTexts),
+		Type:    msg.Success,
+		Options: delayedOptions,
+		DelayedOptions: &msg.DelayedOptions{
+			Timeout: time.Second * 60,
+			Ctx:     ctx,
+		},
+	}
+}
+
 func (h *ChatCompletionHandler) processToolCall(
 	ctx context.Context,
 	choice ChatCompletionChoice,
 	history *[]ConversationMessage,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
-) (responseMessage *msg.ResponseMessage, err error) {
+) (responseMessages []msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
 
 	if len(choice.Message.ToolCalls) == 0 {
 		log.Errorf("Invalid function call, missing tool calls property: %+v", choice.Message)
-		return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
+		return nil, errors.New("didn't get any response from ChatGPT completion API")
 	}
 
 	for i := range choice.Message.ToolCalls {
@@ -543,12 +558,12 @@ func (h *ChatCompletionHandler) processToolCall(
 		if toolCall.Function.Name == "find_wine" {
 			wineFilter, err := h.parseFilter(ctx, toolCall.Function.Arguments)
 			if err != nil {
-				return responseMessage, err
+				return nil, err
 			}
 
 			err = h.enrichFilter(ctx, wineFilter)
 			if err != nil {
-				return responseMessage, err
+				return nil, err
 			}
 
 			recommendStats.FunctionCall = string(toolCall.Function.Arguments)
@@ -593,7 +608,7 @@ func (h *ChatCompletionHandler) processToolCall(
 
 	log.Errorf("Didn't find any matching function: %+v", choice.Message)
 
-	return responseMessage, errors.New("didn't get any response from ChatGPT completion API")
+	return nil, errors.New("didn't get any response from ChatGPT completion API")
 }
 
 func (h *ChatCompletionHandler) enrichFilter(ctx context.Context, f *recommend.WineFilter) error {
@@ -709,16 +724,23 @@ func (h *ChatCompletionHandler) callFindWine(
 	history *[]ConversationMessage,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
-) (responseMessage *msg.ResponseMessage, err error) {
+) (responseMessages []msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
 
-	found, wineFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats)
+	winesFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats, 1)
 	if err != nil {
-		return responseMessage, err
+		return nil, err
 	}
 
-	if !found {
-		notFoundGeneratedResp, err := h.GenerateResponse(ctx, NotFoundSystemMessage, "Ничего не найдено по указанным критериям: "+wineFilter.String(), "recommendation_not_found", req)
+	if len(winesFromDb) == 0 {
+		notFoundGeneratedResp, err := h.GenerateResponse(
+			ctx,
+			NotFoundSystemMessage,
+			"Ничего не найдено по указанным критериям: "+wineFilter.String(),
+			"recommendation_not_found",
+			req,
+			nil,
+		)
 		if err != nil {
 			*history = append(*history, ConversationMessage{
 				Role:      RoleAssistant,
@@ -726,9 +748,13 @@ func (h *ChatCompletionHandler) callFindWine(
 				CreatedAt: time.Now().Unix(),
 			})
 			log.Errorf("Failed to generate not found response %v, falling back to default message", err)
-			return &msg.ResponseMessage{
-				Message: NotFoundMessage,
-			}, nil
+			msgs := []msg.ResponseMessage{
+				{
+					Message: NotFoundMessage,
+				},
+			}
+
+			return msgs, nil
 		}
 
 		*history = append(*history, ConversationMessage{
@@ -738,29 +764,49 @@ func (h *ChatCompletionHandler) callFindWine(
 		})
 		recommendStats.Save(ctx, h.dbConn)
 
-		return &msg.ResponseMessage{
-			Message: notFoundGeneratedResp,
-		}, nil
+		msgs := []msg.ResponseMessage{
+			{
+				Message: notFoundGeneratedResp,
+			},
+		}
+		return msgs, nil
 	}
 
-	log.Debugf("Found wine: %q", wineFromDb.String())
+	log.Debugf("Found %d wines", len(winesFromDb))
 
-	text, err := h.generateWineAnswer(ctx, req, wineFromDb)
+	msgs := []msg.ResponseMessage{}
+
+	for _, wine := range winesFromDb {
+		resp, err := h.generateResponseMessageForWine(ctx, req, wine, recommendStats, history)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, *resp)
+	}
+
+	return msgs, nil
+}
+
+func (h *ChatCompletionHandler) generateResponseMessageForWine(
+	ctx context.Context,
+	req *msg.Request,
+	wineFromDb recommend.Wine,
+	recommendStats *monitoring.Recommendation,
+	history *[]ConversationMessage,
+) (responseMessage *msg.ResponseMessage, err error) {
+	text, err := h.generateWineAnswer(ctx, recommend.WineDescriptionContext, req, wineFromDb, *history)
 	if err != nil {
 		return responseMessage, err
 	}
-
 	recommendStats.RecommendationText = text
 	recommendStats.RecommendedWineID = wineFromDb.Article
 	recommendStats.RecommendedWineSummary = wineFromDb.WineTextualSummaryStr()
 	recommendStats.Save(ctx, h.dbConn)
-
 	*history = append(*history, ConversationMessage{
 		Role:      RoleAssistant,
 		Text:      text,
 		CreatedAt: time.Now().Unix(),
 	})
-
 	respMessage := &msg.ResponseMessage{
 		Message: text,
 	}
@@ -772,7 +818,6 @@ func (h *ChatCompletionHandler) callFindWine(
 			IsBeforeMessage: true,
 		}
 	}
-
 	op := &msg.Options{}
 
 	op.WithPredefinedResponse(msg.PredefinedResponse{
@@ -800,25 +845,37 @@ func (h *ChatCompletionHandler) buildAddToFavoritesQuery(
 
 func (h *ChatCompletionHandler) generateWineAnswer(
 	ctx context.Context,
+	systemMsg string,
 	req *msg.Request,
-	w recommend.Wine,
+	wine recommend.Wine,
+	conversationHistory []ConversationMessage,
 ) (string, error) {
-	respMessage, err := h.GenerateResponse(
-		ctx,
-		recommend.WineDescriptionContext,
-		w.WineTextualSummaryStr(),
-		"wine_card",
-		req,
-	)
+	winesJson, err := json.Marshal(wine)
 	if err != nil {
 		return "", err
 	}
 
-	if respMessage == "" {
-		respMessage = w.String()
+	respMessage, err := h.GenerateResponse(
+		ctx,
+		systemMsg,
+		string(winesJson),
+		"wine_card",
+		req,
+		conversationHistory,
+	)
+	if err != nil {
+		return "", err
 	}
-
 	return respMessage, nil
+}
+
+func (h *ChatCompletionHandler) Generate(
+	ctx context.Context,
+	contextMsg,
+	message, typ string,
+	req *msg.Request,
+) (string, error) {
+	return h.GenerateResponse(ctx, contextMsg, message, typ, req, nil)
 }
 
 func (h *ChatCompletionHandler) GenerateResponse(
@@ -826,6 +883,7 @@ func (h *ChatCompletionHandler) GenerateResponse(
 	contextMsg,
 	message, typ string,
 	req *msg.Request,
+	conversationHistory []ConversationMessage,
 ) (string, error) {
 	usageStats := &monitoring.UsageStats{
 		UserId:       req.Sender.GetID(),
@@ -842,21 +900,26 @@ func (h *ChatCompletionHandler) GenerateResponse(
 		CreatedAtTimestamp: time.Now().Unix(),
 	}
 
+	if conversationHistory == nil {
+		conversationHistory = []ConversationMessage{}
+	}
+
+	winesMessage := ConversationMessage{
+		Role:      RoleUser,
+		Text:      message,
+		CreatedAt: time.Now().Unix(),
+	}
+	conversationHistory = append(conversationHistory, winesMessage)
 	conversation := &Conversation{
-		ID:      req.GetConversationID(),
-		Context: conversationContext,
-		Messages: []ConversationMessage{
-			{
-				Role:      RoleUser,
-				Text:      message,
-				CreatedAt: time.Now().Unix(),
-			},
-		},
+		ID:       req.GetConversationID(),
+		Context:  conversationContext,
+		Messages: conversationHistory,
 	}
 
 	requestData := map[string]interface{}{
-		"model":    model.GetName(),
-		"messages": conversation.ToRaw(),
+		"model":       model.GetName(),
+		"messages":    conversation.ToRaw(),
+		"temperature": 0.7,
 	}
 
 	chatResp := new(ChatCompletionResponse)
