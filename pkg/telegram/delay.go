@@ -64,7 +64,7 @@ func (de *DelayedMessageSender) start() {
 	go func() {
 		for ipt := range de.inputs {
 			ipt.DueTime = time.Now().UTC().Add(ipt.Timeout)
-			err := de.cache.Save(context.Background(), de.buildDelayedKey(ipt.Key), ipt, time.Hour*240)
+			err := de.cache.Save(context.Background(), de.buildDelayedKey(ipt.Key), ipt, ipt.Timeout)
 			if err != nil {
 				logrus.Errorf("failed to store delayed data under %s: %v", ipt.Key, err)
 			}
