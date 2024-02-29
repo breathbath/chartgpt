@@ -29,7 +29,7 @@ func NewSettingsLoader(db storage.Client, cfg *Config, isScopedMode func() bool)
 func (l *Loader) LoadModel(ctx context.Context, req *msg.Request) *ConfiguredModel {
 	return &ConfiguredModel{
 		//Model: "gpt-3.5-turbo-16k-0613",
-		Model: "gpt-3.5-turbo-1106",
+		Model: "gpt-3.5-turbo-0125",
 		//Model: "gpt-4-turbo-preview",
 	}
 	log := logging.WithContext(ctx)

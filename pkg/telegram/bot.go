@@ -4,7 +4,9 @@ import (
 	"breathbathChatGPT/pkg/errs"
 	"breathbathChatGPT/pkg/logging"
 	"breathbathChatGPT/pkg/msg"
+	"breathbathChatGPT/pkg/storage"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -12,6 +14,39 @@ import (
 	"gorm.io/gorm"
 	"strings"
 )
+
+type SendCtx struct {
+	Receiver  string
+	MessageID string
+	ChatID    int64
+}
+
+func (sc SendCtx) Recipient() string {
+	return sc.Receiver
+}
+
+func (sc SendCtx) Validate() error {
+	ers := []string{}
+	if sc.Receiver == "" {
+		ers = append(ers, "Empty receiver info")
+	}
+	if sc.MessageID == "" {
+		ers = append(ers, "Empty message ID")
+	}
+	if sc.ChatID == 0 {
+		ers = append(ers, "Empty chat ID")
+	}
+
+	if len(ers) == 0 {
+		return nil
+	}
+
+	return errors.New(strings.Join(ers, ". "))
+}
+
+func (sc SendCtx) MessageSig() (messageID string, chatID int64) {
+	return sc.MessageID, sc.ChatID
+}
 
 type Bot struct {
 	conf                 *Config
@@ -21,7 +56,7 @@ type Bot struct {
 	delayedMessageSender *DelayedMessageSender
 }
 
-func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB) (*Bot, error) {
+func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB, cache storage.Client, delayedMessagesCallback func(input json.RawMessage) ([]msg.ResponseMessage, error)) (*Bot, error) {
 	validationErr := c.Validate()
 	if validationErr.HasErrors() {
 		return nil, validationErr
@@ -38,7 +73,7 @@ func NewBot(c *Config, r *msg.Router, dbConn *gorm.DB) (*Bot, error) {
 	}
 
 	b := &Bot{conf: c, baseBot: botAPI, msgHandler: r, dbConn: dbConn}
-	delayedMessageSender := NewDelayedMessageSender(b.processResponseMessage)
+	delayedMessageSender := NewDelayedMessageSender(b.processResponseMessage, delayedMessagesCallback, cache)
 	b.delayedMessageSender = delayedMessageSender
 
 	return b, nil
@@ -51,7 +86,13 @@ func (b *Bot) botMsgToRequest(ctx context.Context, telegramCtx telebot.Context) 
 		sender.ID = fmt.Sprint(telegramSender.ID)
 		sender.LastName = telegramSender.LastName
 		sender.FirstName = telegramSender.FirstName
-		sender.UserName = telegramSender.Username
+
+		if telegramSender.Username != "" {
+			sender.UserName = telegramSender.Username
+		} else {
+			sender.UserName = telegramSender.Recipient()
+		}
+
 		sender.Language = telegramSender.LanguageCode
 	}
 
@@ -131,7 +172,7 @@ func (b *Bot) guessParseMode(resp *msg.ResponseMessage) telebot.ParseMode {
 
 func (b *Bot) sendMessageSuccess(
 	ctx context.Context,
-	telegramMsg telebot.Context,
+	sendCtx SendCtx,
 	resp *msg.ResponseMessage,
 	senderOpts *telebot.SendOptions,
 ) error {
@@ -141,33 +182,32 @@ func (b *Bot) sendMessageSuccess(
 		senderOptsMedia := &telebot.SendOptions{
 			ParseMode: senderOpts.ParseMode,
 		}
-		err := b.sendMedia(ctx, telegramMsg, resp, senderOptsMedia)
+		err := b.sendMedia(ctx, sendCtx, resp, senderOptsMedia)
 		if err != nil {
 			return errors.Wrapf(err, "failed to send media:\n%+v", resp.Media)
 		}
 	}
 
 	if resp.Message != "" {
-		_, err := b.baseBot.Send(telegramMsg.Sender(), resp.Message, senderOpts)
+		_, err := b.baseBot.Send(sendCtx, resp.Message, senderOpts)
 		if err != nil {
 			return errors.Wrapf(err, "failed to send success message:\n%s", resp.Message)
 		}
 	}
 
 	if resp.Media != nil && !resp.Media.IsBeforeMessage {
-		err := b.sendMedia(ctx, telegramMsg, resp, senderOpts)
+		err := b.sendMedia(ctx, sendCtx, resp, senderOpts)
 		if err != nil {
 			return errors.Wrapf(err, "failed to send media:\n%+v", resp.Media)
 		}
 	}
 
 	if resp.Options.IsResponseToHiddenMessage() {
-		originalMsg := telegramMsg.Message()
-		deleteErr := b.baseBot.Delete(originalMsg)
+		deleteErr := b.baseBot.Delete(sendCtx)
 		if deleteErr != nil {
-			log.Errorf("failed to delete user message %d: %v", originalMsg.ID, deleteErr)
+			log.Errorf("failed to delete user message %d: %v", sendCtx.MessageID, deleteErr)
 		} else {
-			log.Infof("deleted user message %d as it contained a sensitive data", originalMsg.ID)
+			log.Infof("deleted user message %d as it contained a sensitive data", sendCtx.MessageID)
 		}
 	}
 
@@ -176,7 +216,7 @@ func (b *Bot) sendMessageSuccess(
 
 func (b *Bot) sendMedia(
 	ctx context.Context,
-	telegramMsg telebot.Context,
+	senderCtx SendCtx,
 	resp *msg.ResponseMessage,
 	senderOpts *telebot.SendOptions,
 ) error {
@@ -212,7 +252,7 @@ func (b *Bot) sendMedia(
 		return nil
 	}
 
-	_, err := b.baseBot.Send(telegramMsg.Sender(), sendable, senderOpts)
+	_, err := b.baseBot.Send(senderCtx, sendable, senderOpts)
 	if err != nil {
 		return errors.Wrap(err, "failed to send media")
 	}
@@ -224,13 +264,19 @@ func (b *Bot) sendMedia(
 
 func (b *Bot) processResponseMessage(
 	ctx context.Context,
-	telegramMsg telebot.Context,
+	sendCtx SendCtx,
 	resp *msg.ResponseMessage,
 ) error {
 	log := logrus.WithContext(ctx)
 
 	if resp.DelayedOptions != nil {
-		log.Debugf("Delayed message %q, timeout: %v, sender: %s", resp.Message, resp.DelayedOptions.Timeout, telegramMsg.Sender().Recipient())
+		log.Debugf(
+			"Delayed message %q, timeout: %v, sender: %s, callback: %q",
+			resp.Message,
+			resp.DelayedOptions.Timeout,
+			sendCtx.Receiver,
+			string(resp.DelayedOptions.CallbackPayload),
+		)
 
 		delayedMessage := &msg.ResponseMessage{
 			Message: resp.Message,
@@ -239,12 +285,21 @@ func (b *Bot) processResponseMessage(
 			Media:   resp.Media,
 		}
 		delayedMessageCtx := DelayedMessageCtx{
-			Ctx:         resp.DelayedOptions.Ctx,
-			Message:     delayedMessage,
-			TelegramCtx: telegramMsg,
-			Timeout:     resp.DelayedOptions.Timeout,
+			Message:              delayedMessage,
+			SendCtx:              sendCtx,
+			Timeout:              resp.DelayedOptions.Timeout,
+			Key:                  fmt.Sprintf("%s-%s", resp.DelayedOptions.Key, sendCtx.Receiver),
+			DelayedCallbackInput: resp.DelayedOptions.CallbackPayload,
 		}
+
+		if resp.DelayedOptions.DelayType == msg.DelayTypeMessage {
+			delayedMessageCtx.DelayType = DelayTypeMessage
+		} else if resp.DelayedOptions.DelayType == msg.DelayTypeCallback {
+			delayedMessageCtx.DelayType = DelayTypeCallback
+		}
+
 		b.delayedMessageSender.Plan(delayedMessageCtx)
+
 		return nil
 	}
 
@@ -322,7 +377,7 @@ func (b *Bot) processResponseMessage(
 	switch resp.Type {
 	case msg.Error:
 		_, err = b.baseBot.Send(
-			telegramMsg.Sender(),
+			sendCtx,
 			`❗`+resp.Message+`❗`,
 			senderOpts,
 		)
@@ -331,11 +386,11 @@ func (b *Bot) processResponseMessage(
 			return errors.Wrapf(err, "failed to send error message: %s", resp.Message)
 		}
 	case msg.Success:
-		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
+		return b.sendMessageSuccess(ctx, sendCtx, resp, senderOpts)
 	case msg.Undefined:
-		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
+		return b.sendMessageSuccess(ctx, sendCtx, resp, senderOpts)
 	default:
-		return b.sendMessageSuccess(ctx, telegramMsg, resp, senderOpts)
+		return b.sendMessageSuccess(ctx, sendCtx, resp, senderOpts)
 	}
 
 	return nil
@@ -344,7 +399,19 @@ func (b *Bot) processResponseMessage(
 func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error {
 	log := logrus.WithContext(ctx)
 
-	log.Debugf("got telegram message: %q", telegramContext.Text())
+	sender := telegramContext.Sender()
+	log.Debugf("got telegram message: %q from %+v", telegramContext.Text(), sender)
+	if sender.IsBot {
+		log.Warn("A bot conversation is detected, skipping talking to bot")
+		return nil
+	}
+
+	sendCtx := b.TelegramContextToSendCtx(telegramContext)
+	err := sendCtx.Validate()
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
 
 	req, err := b.botMsgToRequest(ctx, telegramContext)
 	if err != nil {
@@ -353,6 +420,8 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 
 	log.Debugf("resetting delayed conversation with %q", telegramContext.Sender().Recipient())
 	b.delayedMessageSender.Reset(telegramContext.Sender().Recipient())
+	b.delayedMessageSender.Reset(fmt.Sprintf("%s-%s", "delayed_like", telegramContext.Sender().Recipient()))
+	b.delayedMessageSender.Reset(fmt.Sprintf("%s-%s", "delayed_recommend", telegramContext.Sender().Recipient()))
 
 	resp, err := b.msgHandler.Route(ctx, req)
 	if err != nil {
@@ -365,13 +434,23 @@ func (b *Bot) handle(ctx context.Context, telegramContext telebot.Context) error
 	}
 
 	for _, respMsg := range resp.Messages {
-		err = b.processResponseMessage(ctx, telegramContext, &respMsg)
+		sendCtx := b.TelegramContextToSendCtx(telegramContext)
+		err = b.processResponseMessage(ctx, sendCtx, &respMsg)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (b *Bot) TelegramContextToSendCtx(telegramContext telebot.Context) SendCtx {
+	messageID, chatID := telegramContext.Message().MessageSig()
+	return SendCtx{
+		Receiver:  telegramContext.Sender().Recipient(),
+		MessageID: messageID,
+		ChatID:    chatID,
+	}
 }
 
 func (b *Bot) Start() {

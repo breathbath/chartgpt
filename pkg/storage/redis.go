@@ -107,12 +107,6 @@ func (c *RedisClient) Read(ctx context.Context, key string) (raw []byte, found b
 		return nil, false, errors.Wrapf(err, "failed to get data from redis under key %q", key)
 	}
 
-	if ctx.Value(IsNotLoggableContentCtxKey) != nil {
-		log.Debugf("successfully read data from redis under key %q", key)
-	} else {
-		log.Debugf("successfully read data %q from redis under key %q", string(raw), key)
-	}
-
 	return []byte(val), true, nil
 }
 
@@ -170,10 +164,7 @@ func (c *RedisClient) Delete(ctx context.Context, key string) error {
 }
 
 func (c *RedisClient) Load(ctx context.Context, key string, target interface{}) (found bool, err error) {
-	log := logrus.WithContext(ctx)
-
 	targetType := utils.GetType(target)
-	log.Debugf("will load %q for key %s", targetType, key)
 
 	rawData, found, err := c.Read(ctx, key)
 	if err != nil {

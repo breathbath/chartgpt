@@ -68,13 +68,7 @@ type Request struct {
 }
 
 func (r Request) GetConversationID() string {
-	conversationIDI, ok := r.Meta["conversation_id"]
-	conversationID := ""
-	if ok {
-		conversationID = fmt.Sprint(conversationIDI)
-	}
-
-	return fmt.Sprintf("%s/%s/%s", strings.ToLower(r.Platform), conversationID, strings.ToLower(r.Sender.GetID()))
+	return fmt.Sprintf("%s/%s", strings.ToLower(r.Platform), strings.ToLower(r.Sender.GetID()))
 }
 
 type Type uint

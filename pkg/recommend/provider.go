@@ -29,6 +29,7 @@ func (wp *WineProvider) FindByCriteria(
 	f *WineFilter,
 	recommendStats *monitoring.Recommendation,
 	limit int,
+	excludeWineIds []uint,
 ) (wines []Wine, err error) {
 	where := []string{
 		"`deleted_at` IS NULL",
@@ -144,6 +145,11 @@ func (wp *WineProvider) FindByCriteria(
 		orderParams = append(orderParams, dishes)
 	}
 
+	if len(excludeWineIds) > 0 {
+		where = append(where, "AND id not IN ?")
+		whereParams = append(whereParams, excludeWineIds)
+	}
+
 	q = strings.ReplaceAll(q, "$where$", strings.Join(where, " "))
 	q = strings.ReplaceAll(q, "$order$", strings.Join(order, ", "))
 
@@ -153,7 +159,9 @@ func (wp *WineProvider) FindByCriteria(
 
 	res := wp.conn.Raw(q, allParams...).Find(&wines)
 
-	recommendStats.DBQuery = wp.conn.Dialector.Explain(q, allParams...)
+	if recommendStats != nil {
+		recommendStats.DBQuery = wp.conn.Dialector.Explain(q, allParams...)
+	}
 
 	if res.Error != nil {
 		return nil, err

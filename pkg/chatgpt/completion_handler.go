@@ -408,6 +408,14 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 			for _, m := range messages {
 				newMessages = append(newMessages, m)
 			}
+			feedbackMessage, err := h.feedbackMessage(ctx, req)
+			if err != nil {
+				log.Errorf("failed to generate feedback request message: %v", err)
+			} else {
+				if feedbackMessage != nil {
+					newMessages = append(newMessages, *feedbackMessage)
+				}
+			}
 		} else {
 			if choice.Message.Content == "" {
 				continue
@@ -440,15 +448,6 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	err = h.cache.Save(ctx, getConversationKey(req), conversation, defaultConversationValidity)
 	if err != nil {
 		log.Error(err)
-	}
-
-	feedbackMessage, err := h.feedbackMessage(ctx, req)
-	if err != nil {
-		log.Errorf("failed to generate feedback message: %v", err)
-	} else {
-		if feedbackMessage != nil {
-			newMessages = append(newMessages, *feedbackMessage)
-		}
 	}
 
 	return &msg.Response{
@@ -505,36 +504,9 @@ func (h *ChatCompletionHandler) createFeedbackResponse(
 		Type:    msg.Success,
 		Options: delayedOptions,
 		DelayedOptions: &msg.DelayedOptions{
-			Timeout: time.Second * 60,
-			Ctx:     ctx,
-		},
-	}
-}
-
-func (h *ChatCompletionHandler) createdSimilarRecommendedWineMessage(
-	ctx context.Context,
-	wineFilter *recommend.WineFilter,
-	alreadyRecommended recommend.Wine,
-) *msg.ResponseMessage {
-	delayedOptions := &msg.Options{}
-	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
-		Text: "❤️ " + "Нравится",
-		Type: msg.PredefinedResponseInline,
-		Data: fmt.Sprintf("%s", recommend.LikeCommand),
-	})
-	delayedOptions.WithPredefinedResponse(msg.PredefinedResponse{
-		Text: "🗣️️ " + "Отзыв",
-		Type: msg.PredefinedResponseInline,
-		Data: fmt.Sprintf("%s", recommend.DisLikeCommand),
-		Link: "https://t.me/ai_winechef",
-	})
-	return &msg.ResponseMessage{
-		Message: utils.SelectRandomMessage(botLikeTexts),
-		Type:    msg.Success,
-		Options: delayedOptions,
-		DelayedOptions: &msg.DelayedOptions{
-			Timeout: time.Second * 60,
-			Ctx:     ctx,
+			Timeout:   time.Second * 60,
+			Key:       "delayed_like",
+			DelayType: msg.DelayTypeMessage,
 		},
 	}
 }
@@ -727,7 +699,7 @@ func (h *ChatCompletionHandler) callFindWine(
 ) (responseMessages []msg.ResponseMessage, err error) {
 	log := logging.WithContext(ctx)
 
-	winesFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats, 1)
+	winesFromDb, err := h.wineProvider.FindByCriteria(ctx, wineFilter, recommendStats, 1, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -776,7 +748,9 @@ func (h *ChatCompletionHandler) callFindWine(
 
 	msgs := []msg.ResponseMessage{}
 
+	excludeWineIds := []uint{}
 	for _, wine := range winesFromDb {
+		excludeWineIds = append(excludeWineIds, wine.ID)
 		resp, err := h.generateResponseMessageForWine(ctx, req, wine, recommendStats, history)
 		if err != nil {
 			return nil, err
@@ -784,7 +758,147 @@ func (h *ChatCompletionHandler) callFindWine(
 		msgs = append(msgs, *resp)
 	}
 
+	delayedMessageRecommendation, err := h.getDelayedRecommendation(wineFilter, excludeWineIds, req)
+	if err != nil {
+		log.Errorf("failed to generate delayed recommendation: %v", err)
+	} else if delayedMessageRecommendation != nil {
+		msgs = append(msgs, *delayedMessageRecommendation)
+	}
+
 	return msgs, nil
+}
+
+func (h *ChatCompletionHandler) getDelayedRecommendation(
+	wineFilter *recommend.WineFilter,
+	excludeWineIds []uint,
+	req *msg.Request,
+) (*msg.ResponseMessage, error) {
+	delayedCallbackPayload := DelayedRecommendation{
+		Filter:        *wineFilter,
+		ExcludedWines: excludeWineIds,
+		Request:       *req,
+	}
+	delayedCallbackPayloadRaw, err := json.Marshal(delayedCallbackPayload)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert DelayedRecommendation to json")
+	}
+
+	return &msg.ResponseMessage{
+		Type: msg.Success,
+		DelayedOptions: &msg.DelayedOptions{
+			Timeout:         time.Hour * 24 * 5,
+			Key:             "returning_recommendation",
+			CallbackPayload: delayedCallbackPayloadRaw,
+			DelayType:       msg.DelayTypeCallback,
+		},
+	}, nil
+}
+
+type DelayedRecommendation struct {
+	Filter        recommend.WineFilter
+	ExcludedWines []uint
+	Request       msg.Request
+}
+
+func (h *ChatCompletionHandler) ProcessDelayedRecommendation(input json.RawMessage) (responseMessages []msg.ResponseMessage, err error) {
+	var delayedRecommendation DelayedRecommendation
+	err = json.Unmarshal(input, &delayedRecommendation)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to convert %s to DelayedRecommendation, skipping delayed call", string(input))
+	}
+
+	recommendedWines, err := h.wineProvider.FindByCriteria(context.Background(), &delayedRecommendation.Filter, nil, 1, delayedRecommendation.ExcludedWines)
+	if err != nil {
+		return nil, err
+	}
+
+	msgs := []msg.ResponseMessage{}
+
+	conversation, err := h.buildConversation(context.Background(), &delayedRecommendation.Request)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, recommendedWine := range recommendedWines {
+		resp, err := h.generateRecommendMessageForWine(
+			context.Background(),
+			&delayedRecommendation.Request,
+			recommendedWine,
+			&conversation.Messages,
+			nil,
+		)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, *resp)
+	}
+
+	err = h.cache.Save(
+		context.Background(),
+		getConversationKey(&delayedRecommendation.Request),
+		conversation,
+		defaultConversationValidity,
+	)
+	if err != nil {
+		logging.Error(err)
+	}
+
+	return msgs, nil
+}
+
+func (h *ChatCompletionHandler) generateRecommendMessageForWine(
+	ctx context.Context,
+	req *msg.Request,
+	wineFromDb recommend.Wine,
+	history *[]ConversationMessage,
+	recommendStats *monitoring.Recommendation,
+) (responseMessage *msg.ResponseMessage, err error) {
+	winesJson, err := json.Marshal(wineFromDb)
+	if err != nil {
+		return nil, err
+	}
+
+	text, err := h.GenerateResponse(
+		ctx,
+		recommend.RememberRecommendationWineCardContext,
+		string(winesJson),
+		"wine_card",
+		req,
+		history,
+	)
+	if err != nil {
+		return responseMessage, err
+	}
+
+	respMessage := &msg.ResponseMessage{
+		Message: text,
+	}
+	if wineFromDb.Photo != "" {
+		respMessage.Media = &msg.Media{
+			Path:            wineFromDb.Photo,
+			Type:            msg.MediaTypeImage,
+			PathType:        msg.MediaPathTypeUrl,
+			IsBeforeMessage: true,
+		}
+	}
+	op := &msg.Options{
+		OutputFormat: msg.OutputFormatMarkdown1,
+	}
+
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "📌️ " + "Запомнить",
+		Type: msg.PredefinedResponseInline,
+		Data: h.buildAddToFavoritesQuery(&wineFromDb, recommendStats),
+	})
+	op.WithPredefinedResponse(msg.PredefinedResponse{
+		Text: "⭐ " + "Избранное",
+		Type: msg.PredefinedResponseInline,
+		Data: "/list_favorites",
+	})
+
+	respMessage.Options = op
+
+	return respMessage, nil
 }
 
 func (h *ChatCompletionHandler) generateResponseMessageForWine(
@@ -794,14 +908,18 @@ func (h *ChatCompletionHandler) generateResponseMessageForWine(
 	recommendStats *monitoring.Recommendation,
 	history *[]ConversationMessage,
 ) (responseMessage *msg.ResponseMessage, err error) {
-	text, err := h.generateWineAnswer(ctx, recommend.WineDescriptionContext, req, wineFromDb, *history)
+	text, err := h.generateWineAnswer(ctx, recommend.WineDescriptionContext, req, wineFromDb, history)
 	if err != nil {
 		return responseMessage, err
 	}
-	recommendStats.RecommendationText = text
-	recommendStats.RecommendedWineID = wineFromDb.Article
-	recommendStats.RecommendedWineSummary = wineFromDb.WineTextualSummaryStr()
-	recommendStats.Save(ctx, h.dbConn)
+
+	if recommendStats != nil {
+		recommendStats.RecommendationText = text
+		recommendStats.RecommendedWineID = wineFromDb.Article
+		recommendStats.RecommendedWineSummary = wineFromDb.WineTextualSummaryStr()
+		recommendStats.Save(ctx, h.dbConn)
+	}
+
 	*history = append(*history, ConversationMessage{
 		Role:      RoleAssistant,
 		Text:      text,
@@ -818,7 +936,9 @@ func (h *ChatCompletionHandler) generateResponseMessageForWine(
 			IsBeforeMessage: true,
 		}
 	}
-	op := &msg.Options{}
+	op := &msg.Options{
+		OutputFormat: msg.OutputFormatMarkdown1,
+	}
 
 	op.WithPredefinedResponse(msg.PredefinedResponse{
 		Text: "📌️ " + "Запомнить",
@@ -840,7 +960,11 @@ func (h *ChatCompletionHandler) buildAddToFavoritesQuery(
 	wineFromDb *recommend.Wine,
 	recommendStats *monitoring.Recommendation,
 ) string {
-	return fmt.Sprintf("%s %d %d", recommend.AddToFavoritesCommand, wineFromDb.ID, recommendStats.ID)
+	if recommendStats != nil {
+		return fmt.Sprintf("%s %d %d", recommend.AddToFavoritesCommand, wineFromDb.ID, recommendStats.ID)
+	}
+
+	return fmt.Sprintf("%s %d", recommend.AddToFavoritesCommand, wineFromDb.ID)
 }
 
 func (h *ChatCompletionHandler) generateWineAnswer(
@@ -848,7 +972,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 	systemMsg string,
 	req *msg.Request,
 	wine recommend.Wine,
-	conversationHistory []ConversationMessage,
+	conversationHistory *[]ConversationMessage,
 ) (string, error) {
 	winesJson, err := json.Marshal(wine)
 	if err != nil {
@@ -883,7 +1007,7 @@ func (h *ChatCompletionHandler) GenerateResponse(
 	contextMsg,
 	message, typ string,
 	req *msg.Request,
-	conversationHistory []ConversationMessage,
+	conversationHistory *[]ConversationMessage,
 ) (string, error) {
 	usageStats := &monitoring.UsageStats{
 		UserId:       req.Sender.GetID(),
@@ -901,7 +1025,7 @@ func (h *ChatCompletionHandler) GenerateResponse(
 	}
 
 	if conversationHistory == nil {
-		conversationHistory = []ConversationMessage{}
+		conversationHistory = &[]ConversationMessage{}
 	}
 
 	winesMessage := ConversationMessage{
@@ -909,11 +1033,11 @@ func (h *ChatCompletionHandler) GenerateResponse(
 		Text:      message,
 		CreatedAt: time.Now().Unix(),
 	}
-	conversationHistory = append(conversationHistory, winesMessage)
+	*conversationHistory = append(*conversationHistory, winesMessage)
 	conversation := &Conversation{
 		ID:       req.GetConversationID(),
 		Context:  conversationContext,
-		Messages: conversationHistory,
+		Messages: *conversationHistory,
 	}
 
 	requestData := map[string]interface{}{

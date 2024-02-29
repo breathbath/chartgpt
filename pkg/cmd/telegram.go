@@ -6,6 +6,7 @@ import (
 	"breathbathChatGPT/pkg/msg"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
+	"encoding/json"
 	logging "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -33,12 +34,12 @@ var telegramCmd = &cobra.Command{
 			return err
 		}
 
-		msgRouter, err := BuildMessageRouter(redisClient, dbConn)
+		msgRouter, delayedMessagesCallback, err := BuildMessageRouter(redisClient, dbConn)
 		if err != nil {
 			return err
 		}
 
-		bot, err := buildTelegram(msgRouter, dbConn)
+		bot, err := buildTelegram(msgRouter, dbConn, redisClient, delayedMessagesCallback)
 		if err != nil {
 			return err
 		}
@@ -66,8 +67,8 @@ func waitForSignal(server *telegram.Bot) {
 	server.Stop()
 }
 
-func buildTelegram(r *msg.Router, dbConn *gorm.DB) (*telegram.Bot, error) {
-	telegramBot, err := telegram.BuildBot(r, dbConn)
+func buildTelegram(r *msg.Router, dbConn *gorm.DB, cache storage.Client, delayedMessagesCallback func(input json.RawMessage) ([]msg.ResponseMessage, error)) (*telegram.Bot, error) {
+	telegramBot, err := telegram.BuildBot(r, dbConn, cache, delayedMessagesCallback)
 	if err != nil {
 		return nil, err
 	}

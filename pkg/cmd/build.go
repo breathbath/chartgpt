@@ -8,20 +8,21 @@ import (
 	"breathbathChatGPT/pkg/recommend"
 	"breathbathChatGPT/pkg/storage"
 	"breathbathChatGPT/pkg/telegram"
+	"encoding/json"
 	"gorm.io/gorm"
 )
 
 func BuildMessageRouter(
 	cacheClient storage.Client,
 	dbConn *gorm.DB,
-) (*msg.Router, error) {
+) (*msg.Router, func(input json.RawMessage) ([]msg.ResponseMessage, error), error) {
 	us := auth.NewUserStorage(cacheClient)
 
 	userMiddleware := auth.NewUserMiddleware(us)
 
 	loginHandler, err := auth.BuildLoginHandler(us)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	logoutHandler := auth.NewLogoutHandler(us)
@@ -30,7 +31,7 @@ func BuildMessageRouter(
 
 	chartGptCfg, err := chatgpt.LoadConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	isScopedModeFunc := func() bool {
@@ -48,7 +49,7 @@ func BuildMessageRouter(
 
 	validationErr := chartGptCfg.Validate()
 	if validationErr.HasErrors() {
-		return nil, validationErr
+		return nil, nil, validationErr
 	}
 
 	loader := chatgpt.NewSettingsLoader(cacheClient, chartGptCfg, isScopedModeFunc)
@@ -72,7 +73,7 @@ func BuildMessageRouter(
 		getConversationCtxHandler,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	addUserHandler := auth.NewAddUserCommand(us, isAdminDetector)
@@ -120,5 +121,5 @@ func BuildMessageRouter(
 
 	r.UseMiddleware(userMiddleware)
 
-	return r, nil
+	return r, chatCompletionHandler.ProcessDelayedRecommendation, nil
 }

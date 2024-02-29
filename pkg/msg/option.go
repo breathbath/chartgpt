@@ -1,7 +1,7 @@
 package msg
 
 import (
-	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -12,6 +12,13 @@ const (
 	OutputFormatMarkdown1
 	OutputFormatMarkdown2
 	OutputFormatHTML
+)
+
+type DelayType uint
+
+const (
+	DelayTypeMessage DelayType = iota + 1
+	DelayTypeCallback
 )
 
 const (
@@ -32,41 +39,43 @@ type PredefinedResponseOptions struct {
 }
 
 type DelayedOptions struct {
-	Timeout time.Duration
-	Ctx     context.Context
+	Timeout         time.Duration
+	Key             string
+	CallbackPayload json.RawMessage
+	DelayType       DelayType
 }
 
 type Options struct {
-	outputFormat              OutputFormat
-	isResponseToHiddenMessage bool
-	predefinedResponseOptions *PredefinedResponseOptions
+	OutputFormat              OutputFormat
+	IsRespToHiddenMessage     bool
+	PredefinedResponseOptions *PredefinedResponseOptions
 }
 
 func (o *Options) WithFormat(f OutputFormat) {
-	o.outputFormat = f
+	o.OutputFormat = f
 }
 
 func (o *Options) WithIsResponseToHiddenMessage() {
-	o.isResponseToHiddenMessage = true
+	o.IsRespToHiddenMessage = true
 }
 
 func (o *Options) WithPredefinedResponse(resp PredefinedResponse) {
-	if o.predefinedResponseOptions == nil {
-		o.predefinedResponseOptions = &PredefinedResponseOptions{}
+	if o.PredefinedResponseOptions == nil {
+		o.PredefinedResponseOptions = &PredefinedResponseOptions{}
 	}
 
-	if o.predefinedResponseOptions.Responses == nil {
-		o.predefinedResponseOptions.Responses = []PredefinedResponse{}
+	if o.PredefinedResponseOptions.Responses == nil {
+		o.PredefinedResponseOptions.Responses = []PredefinedResponse{}
 	}
 
-	o.predefinedResponseOptions.Responses = append(o.predefinedResponseOptions.Responses, resp)
+	o.PredefinedResponseOptions.Responses = append(o.PredefinedResponseOptions.Responses, resp)
 }
 
 func (o *Options) WithIsTempPredefinedResponse() {
-	if o.predefinedResponseOptions == nil {
-		o.predefinedResponseOptions = &PredefinedResponseOptions{}
+	if o.PredefinedResponseOptions == nil {
+		o.PredefinedResponseOptions = &PredefinedResponseOptions{}
 	}
-	o.predefinedResponseOptions.IsTemp = true
+	o.PredefinedResponseOptions.IsTemp = true
 }
 
 func (o *Options) GetFormat() OutputFormat {
@@ -74,7 +83,7 @@ func (o *Options) GetFormat() OutputFormat {
 		return OutputFormatUndefined
 	}
 
-	return o.outputFormat
+	return o.OutputFormat
 }
 
 func (o *Options) IsResponseToHiddenMessage() bool {
@@ -82,21 +91,21 @@ func (o *Options) IsResponseToHiddenMessage() bool {
 		return false
 	}
 
-	return o.isResponseToHiddenMessage
+	return o.IsRespToHiddenMessage
 }
 
 func (o *Options) GetPredefinedResponses() []PredefinedResponse {
-	if o == nil || o.predefinedResponseOptions == nil {
+	if o == nil || o.PredefinedResponseOptions == nil {
 		return nil
 	}
 
-	return o.predefinedResponseOptions.Responses
+	return o.PredefinedResponseOptions.Responses
 }
 
 func (o *Options) IsTempPredefinedResponse() bool {
-	if o == nil || o.predefinedResponseOptions == nil {
+	if o == nil || o.PredefinedResponseOptions == nil {
 		return false
 	}
 
-	return o.predefinedResponseOptions.IsTemp
+	return o.PredefinedResponseOptions.IsTemp
 }

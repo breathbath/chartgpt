@@ -9,18 +9,9 @@ import (
 
 func MigrateUsers(ctx context.Context, cfg *Config, us *UserStorage) error {
 	log := logrus.WithContext(ctx)
-	log.Debug("Will migrate configured users to db")
+	log.Debug("Will migrate configured users to cache")
 
 	for _, u := range cfg.Users {
-		cachedUser, err := us.ReadUserFromStorage(ctx, u.PlatformName, u.Login)
-		if err != nil {
-			return err
-		}
-
-		if cachedUser != nil {
-			continue
-		}
-
 		u := &CachedUser{
 			UID:          uuid.NewString(),
 			Login:        u.Login,
@@ -29,7 +20,7 @@ func MigrateUsers(ctx context.Context, cfg *Config, us *UserStorage) error {
 			Role:         u.Role,
 			PasswordHash: u.PasswordHash,
 		}
-		err = us.WriteUserToStorage(ctx, u)
+		err := us.WriteUserToStorage(ctx, u)
 
 		if err != nil {
 			return err
