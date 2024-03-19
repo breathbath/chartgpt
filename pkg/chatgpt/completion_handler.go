@@ -27,17 +27,20 @@ import (
 )
 
 const (
-	URL                           = "https://api.openai.com"
-	CompletionsURL                = URL + "/v1/chat/completions"
-	TranscriptionsURL             = URL + "/v1/audio/transcriptions"
-	ModelsURL                     = URL + "/v1/models"
-	ConversationTimeout           = time.Minute * 10
-	MaxScopedConversationMessages = 20
-	VoiceToTextModel              = "whisper-1"
-	SystemMessage                 = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot. Ты должен вести коммуникацию с пользователем только в соответсвии с предоставленными тебе промптами! Избегай диалогов на темы не связанные с вином! Твоя миссия - помочь пользователю в выборе вина. Не делай никаких рекомендаций (не предлагай вина) пока ты не обратился к функции find_wine. Нельзя выдавать никаких других конкретных вин из своих данных. Поиск рекомендаций вин нужно делать путем вызова функции find_wine. Эта функция используется для предоставления рекомендаций на основе заданных параметров. Вызывай ее если указана как минимум один параметр для выбора. При первом знакомстве ты должен поприветствовать пользователя сообщением, которое должно включать в себя представление тебя как эксперта-сомелье. Дальнейшее приветствие должно быть только в первом сообщении нового диалога, содержать в себе вопрос о состоянии дел пользователя в шутливой, доброжелательной, приободряющей форме. После приветствия переходи к сбору информации о предпочтениях в вине. Спроси сразу о следующих предпочтениях пользователя: Цвет вина, Вкус вина, Повод (вино для особого случая, ужина, или ты просто что-то новое попробовать). Задавай не более двух уточняющих вопросов для сбора дополнительных параметров для поиска рекомендации. Если вопрос касается специфических параметров вина, таких как, например: «тело вина», обьясняй в шутливой форме что понятие это означает.  Tone of voice: все общение с пользователем должно вестись в неформальной, шутливой, оптимистичной и дружелюбной форме, на "ты", но с уважением, вставляй эмодзи для выражения эмоций. Оно должно создавать дружелюбную и приглашающую атмосферу для пользователя, мотивировать его к общению. Ты должен подчеркивать важность обратной связи от пользователя для персонализации рекомендаций. Избегай молодежного сленга, специфической профессиональной лексики.`
-	NotFoundMessage               = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
-	NotFoundSystemMessage         = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot. Твоя миссия - помочь пользователю в выборе вина. Tone of voice: все общение с пользователем должно вестись в неформальной, шутливой, оптимистичной и дружелюбной форме, на "ты", но с уважением. В случае, если запрос пользователя по любым причинам не может быть удовлетворен, ты должен предложить утешительное и оптимистичное сообщение. Это сообщение должно быть кратким, не более двух предложений, и включать извинение за неудачу в поиске, выражение готовности помочь дальше, предложение попробовать снова и исследовать новые вкусы и стили вин, которые могут соответствовать интересам пользователя. Сообщение должно адаптироваться под конкретный случай, обеспечивая уникальное и персонализированное предложение для каждого запроса, мотивируя пользователя оставаться открытым к новым винным открытиям.`
-	PromptFiltersMessage          = `Задай пользователю дополнительные вопросы по следующим параметрам: %s`
+	URL                              = "https://api.openai.com"
+	CompletionsURL                   = URL + "/v1/chat/completions"
+	TranscriptionsURL                = URL + "/v1/audio/transcriptions"
+	ModelsURL                        = URL + "/v1/models"
+	ConversationTimeout              = time.Minute * 10
+	MaxScopedConversationMessages    = 20
+	VoiceToTextModel                 = "whisper-1"
+	SystemMessage                    = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot. Ты должен вести коммуникацию с пользователем только в соответсвии с предоставленными тебе промптами! Избегай диалогов на темы не связанные с вином! Твоя миссия - помочь пользователю в выборе вина. Не делай никаких рекомендаций (не предлагай вина) пока ты не обратился к функции find_wine. Нельзя выдавать никаких других конкретных вин из своих данных. Поиск рекомендаций вин нужно делать путем вызова функции find_wine. Эта функция используется для предоставления рекомендаций на основе заданных параметров. Вызывай ее если указана как минимум один параметр для выбора. При первом знакомстве ты должен поприветствовать пользователя сообщением, которое должно включать в себя представление тебя как эксперта-сомелье. Дальнейшее приветствие должно быть только в первом сообщении нового диалога, содержать в себе вопрос о состоянии дел пользователя в шутливой, доброжелательной, приободряющей форме. После приветствия переходи к сбору информации о предпочтениях в вине. Спроси сразу о следующих предпочтениях пользователя: Цвет вина, Вкус вина, Повод (вино для особого случая, ужина, или ты просто что-то новое попробовать). Задавай не более двух уточняющих вопросов для сбора дополнительных параметров для поиска рекомендации. Если вопрос касается специфических параметров вина, таких как, например: «тело вина», обьясняй в шутливой форме что понятие это означает.  Tone of voice: все общение с пользователем должно вестись в неформальной, шутливой, оптимистичной и дружелюбной форме, на "ты", но с уважением, вставляй эмодзи для выражения эмоций. Оно должно создавать дружелюбную и приглашающую атмосферу для пользователя, мотивировать его к общению. Ты должен подчеркивать важность обратной связи от пользователя для персонализации рекомендаций. Избегай молодежного сленга, специфической профессиональной лексики. Вызывай функцию feedback_wine_recommendation после отзыва пользователя на предоставленную рекоммендацию по вину.`
+	SystemMessageAfterRecommendation = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot. Tone of voice: все общение с пользователем должно вестись в неформальной, шутливой, оптимистичной и дружелюбной форме, на "ты", но с уважением, вставляй эмодзи для выражения эмоций. Оно должно создавать дружелюбную и приглашающую атмосферу для пользователя, мотивировать его к общению. Ты только что дал рекомендацию по конкретному вину и запросил понравилась ли юзеру рекомендация. Избегай молодежного сленга, специфической профессиональной лексики. Вызывай функцию feedback_wine_recommendation после отзыва пользователя на предоставленную рекоммендацию по вину.`
+	NotFoundMessage                  = `Извините, но наша система не нашла никаких вариантов вина, соответствующих вашему запросу. Пожалуйста, попробуйте изменить критерии для поиска, такие как уровень сахара, цвет или страна производства. Мы надеемся, что вы сможете найти подходящее вино!`
+	NotFoundSystemMessage            = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot. Твоя миссия - помочь пользователю в выборе вина. Tone of voice: все общение с пользователем должно вестись в неформальной, шутливой, оптимистичной и дружелюбной форме, на "ты", но с уважением. В случае, если запрос пользователя по любым причинам не может быть удовлетворен, ты должен предложить утешительное и оптимистичное сообщение. Это сообщение должно быть кратким, не более двух предложений, и включать извинение за неудачу в поиске, выражение готовности помочь дальше, предложение попробовать снова и исследовать новые вкусы и стили вин, которые могут соответствовать интересам пользователя. Сообщение должно адаптироваться под конкретный случай, обеспечивая уникальное и персонализированное предложение для каждого запроса, мотивируя пользователя оставаться открытым к новым винным открытиям.`
+	PromptFiltersMessage             = `Задай пользователю дополнительные вопросы по следующим параметрам: %s`
+	NegativeRecommendationSystemMsg  = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot На рекомендацию получен негативный ответ пользователя, предложи утешительное и оптимистичное сообщение в шутливой форме с эмодзи. Оно должно быть кратким (не более 180 символов) и мотивирующим, предложи повторный поиск вин, которые могут соответствовать вкусу пользователя, включать извинение за неудачу`
+	PositiveRecommendationSystemMsg  = `Ты голосовой помощник, действующий как сомелье на базе искусственного интеллекта WineChefBot.На рекомендацию получен позитивный ответ пользователя, сообщи в оптимистичной и шутливой форме с эмодзи о своей радости и постоянной готовности помогать в выборе вина.  Уточни нужна ли еще какая-то помощь пользователю, при получении отрицательного ответа попрощайся. Сообщение должно быть кратким не более 180 символов`
 )
 
 var colors = []string{"Белое", "Розовое", "Красное", "Оранжевое"}
@@ -269,10 +272,33 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	if err != nil {
 		return nil, err
 	}
+
+	request := Request{
+		Model: model.GetName(),
+		Tools: []ToolCallRequest{
+			{
+				Type:     "function",
+				Function: findWineFunction,
+			},
+		},
+	}
+
+	if conversation.Messages.HasLastMessageTopic("wine_recommendation") {
+		request.Tools = append(request.Tools, ToolCallRequest{
+			Type:     "function",
+			Function: feedbackRecommendationFunction,
+		})
+		conversation.Context = &Context{
+			Message:            SystemMessageAfterRecommendation,
+			CreatedAtTimestamp: time.Now().UTC().Unix(),
+		}
+	}
+
 	conversation.Messages = append(conversation.Messages, ConversationMessage{
 		Role:      RoleUser,
 		Text:      req.Message,
 		CreatedAt: time.Now().Unix(),
+		Topic:     "user_input",
 	})
 
 	usageStats := &monitoring.UsageStats{
@@ -283,99 +309,17 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 	}
 	usageStats.SetTrackingID(ctx)
 
-	findWineFunction := map[string]interface{}{
-		"name":        "find_wine",
-		"description": "Find wine by provided parameters",
-		"parameters": map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"цвет": map[string]interface{}{
-					"type": "string",
-					"enum": colors,
-				},
-				"год": map[string]interface{}{
-					"type": "number",
-				},
-				"сахар": map[string]interface{}{
-					"type": "string",
-					"enum": sugars,
-				},
-				"крепость": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "number",
-					},
-				},
-				"подходящие блюда": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "string",
-						"enum": []string{
-							"аперитив", "баранина", "блюда", "вегетарианская", "говядина", "грибы", "десерт", "дичь", "закуски", "курица", "морепродукты", "мясные", "овощи", "оливки", "острые", "паста", "пернатая", "ракообразные", "рыба", "свинина", "суши", "сыр", "телятина", "фрукты", "фуа-гра", "ягнятина"},
-					},
-				},
-				"тело": map[string]interface{}{
-					"type": "string",
-					"enum": bodies,
-				},
-				"название": map[string]interface{}{
-					"description": "Название вина",
-					"type":        "string",
-				},
-				"вкус и аромат": map[string]interface{}{
-					"type": "string",
-				},
-				"страна": map[string]interface{}{
-					"type": "string",
-				},
-				"регион": map[string]interface{}{
-					"type": "string",
-				},
-				"виноград": map[string]interface{}{
-					"description": "сорт винограда",
-					"type":        "string",
-				},
-				"тип": map[string]interface{}{
-					"type": "string",
-					"enum": types,
-				},
-				"стиль": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "string",
-						"enum": recommend.StylesEnaum,
-					},
-				},
-				"цена": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "number",
-					},
-				},
-			},
-		},
-	}
-	requestData := map[string]interface{}{
-		"model":    model.GetName(),
-		"messages": conversation.ToRaw(),
-		//"temperature": 0.5,
-		"tools": []map[string]interface{}{
-			{
-				"type":     "function",
-				"function": findWineFunction,
-			},
-		},
-	}
+	request.Messages = conversation.ToRaw()
 
 	chatResp := new(ChatCompletionResponse)
 	reqsr := rest.NewRequester(CompletionsURL, chatResp)
 	reqsr.WithBearer(h.cfg.APIKey)
 	reqsr.WithPOST()
-	reqsr.WithInput(requestData)
+	reqsr.WithInput(request)
 
 	recommendStats := &monitoring.Recommendation{
 		UserID:         req.Sender.GetID(),
-		RawModelInput:  utils.ConvToStr(requestData),
+		RawModelInput:  utils.ConvToStr(request),
 		RawModelOutput: utils.ConvToStr(chatResp),
 		UserPrompt:     req.Message,
 	}
@@ -386,11 +330,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 		return nil, err
 	}
 
-	inputBytes, err := json.Marshal(requestData)
-	if err != nil {
-		inputBytes = []byte{}
-	}
-	usageStats.Input = string(inputBytes)
+	usageStats.Input = utils.ConvToStr(request)
 
 	usageStats.InputCompletionTokens = chatResp.Usage.CompletionTokens
 	usageStats.InputPromptTokens = chatResp.Usage.PromptTokens
@@ -424,6 +364,7 @@ func (h *ChatCompletionHandler) Handle(ctx context.Context, req *msg.Request) (*
 				Role:      RoleAssistant,
 				Text:      choice.Message.Content,
 				CreatedAt: chatResp.CreatedAt,
+				Topic:     "assistant_output",
 			}
 			conversation.Messages = append(conversation.Messages, message)
 
@@ -514,7 +455,7 @@ func (h *ChatCompletionHandler) createFeedbackResponse(
 func (h *ChatCompletionHandler) processToolCall(
 	ctx context.Context,
 	choice ChatCompletionChoice,
-	history *[]ConversationMessage,
+	history *ConversationMessages,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
 ) (responseMessages []msg.ResponseMessage, err error) {
@@ -575,6 +516,12 @@ func (h *ChatCompletionHandler) processToolCall(
 			//	}, nil
 			//}
 			//continue
+		} else if toolCall.Function.Name == "feedback_wine_recommendation" {
+			recommendFeedback, err := h.parseRecommendationFeedback(ctx, toolCall.Function.Arguments)
+			if err != nil {
+				return nil, err
+			}
+			return h.callRecommendationFeedback(ctx, history, req, recommendFeedback)
 		}
 	}
 
@@ -690,10 +637,193 @@ func (h *ChatCompletionHandler) parseFilter(ctx context.Context, arguments json.
 	return wineFilter, nil
 }
 
+func (h *ChatCompletionHandler) parseRecommendationFeedback(ctx context.Context, arguments json.RawMessage) (
+	*RecommendationFeedback,
+	error,
+) {
+	logging.Debugf("GPT Function call: %q", string(arguments))
+	var data string
+	err := json.Unmarshal(arguments, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	var argumentsMap map[string]interface{}
+
+	err = json.Unmarshal([]byte(data), &argumentsMap)
+	if err != nil {
+		normalisedData := utils.NormalizeJSON(ctx, data)
+		logging.Debugf("JSON Normalization: %q", normalisedData)
+		err = json.Unmarshal([]byte(normalisedData), &argumentsMap)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	feedback := &RecommendationFeedback{}
+
+	if val, ok := argumentsMap["is_positive_feedback"]; ok {
+		feedback.IsPositive = utils.ParseBool(val)
+	}
+
+	if val, ok := argumentsMap["feedback_text"]; ok {
+		feedback.Text = utils.ParseStr(val)
+	}
+
+	logging.Debugf("converted function call %q to recommendation feedback %+v", string(arguments), feedback)
+
+	return feedback, nil
+}
+
+func (h *ChatCompletionHandler) parseRecommednationFeedback(ctx context.Context, arguments json.RawMessage) (*recommend.WineFilter, error) {
+	logging.Debugf("GPT Function call: %q", string(arguments))
+	var data string
+	err := json.Unmarshal(arguments, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	var argumentsMap map[string]interface{}
+
+	err = json.Unmarshal([]byte(data), &argumentsMap)
+	if err != nil {
+		normalisedData := utils.NormalizeJSON(ctx, data)
+		logging.Debugf("JSON Normalization: %q", normalisedData)
+		err = json.Unmarshal([]byte(normalisedData), &argumentsMap)
+		if err != nil {
+			logging.Errorf("Failed to parse arguments list %q: %v", string(arguments), err)
+			return nil, nil
+		}
+	}
+
+	wineFilter := &recommend.WineFilter{}
+
+	if val, ok := argumentsMap["цвет"]; ok {
+		wineFilter.Color = utils.ParseEnumStr(val, colors)
+	}
+
+	if val, ok := argumentsMap["сахар"]; ok {
+		wineFilter.Sugar = utils.ParseEnumStr(val, sugars)
+	}
+
+	if val, ok := argumentsMap["страна"]; ok {
+		wineFilter.Country = utils.ParseStr(val)
+	}
+
+	if val, ok := argumentsMap["регион"]; ok {
+		wineFilter.Region = utils.ParseStr(val)
+	}
+
+	if val, ok := argumentsMap["виноград"]; ok {
+		wineFilter.Grape = utils.ParseStr(val)
+	}
+
+	if wineFilter.Grape == "" {
+		if val, ok := argumentsMap["сорт винограда"]; ok {
+			wineFilter.Grape = utils.ParseStr(val)
+		}
+	}
+
+	if val, ok := argumentsMap["сорт"]; ok {
+		wineFilter.Grape = utils.ParseStr(val)
+	}
+
+	if val, ok := argumentsMap["год"]; ok {
+		year, err := strconv.Atoi(fmt.Sprint(val))
+		if err == nil {
+			wineFilter.Year = year
+		}
+	}
+
+	wineFilter.AlcoholPercentage = utils.ParseRangeFloat(argumentsMap, "крепость")
+
+	wineFilter.MatchingDishes = utils.ParseArgumentsToStrings(argumentsMap, "подходящие блюда")
+
+	if val, ok := argumentsMap["тело"]; ok {
+		wineFilter.Body = utils.ParseEnumStr(val, bodies)
+	}
+
+	if val, ok := argumentsMap["тип"]; ok {
+		wineFilter.Type = utils.ParseEnumStr(val, types)
+	}
+
+	if val, ok := argumentsMap["название"]; ok {
+		wineFilter.Name = utils.ParseStr(val)
+	}
+
+	if val, ok := argumentsMap["вкус и аромат"]; ok {
+		wineFilter.Taste = utils.ParseStr(val)
+	}
+
+	wineFilter.PriceRange = utils.ParseRangeFloat(argumentsMap, "цена")
+
+	wineFilter.Style = utils.ParseArgumentsToStrings(argumentsMap, "стиль")
+
+	return wineFilter, nil
+}
+
+func (h *ChatCompletionHandler) callRecommendationFeedback(
+	ctx context.Context,
+	history *ConversationMessages,
+	req *msg.Request,
+	feedback *RecommendationFeedback,
+) (responseMessages []msg.ResponseMessage, err error) {
+	log := logging.WithContext(ctx)
+	log.Debug(req.Message)
+
+	op := &msg.Options{
+		OutputFormat: msg.OutputFormatMarkdown1,
+	}
+	respondeText := ""
+	if !feedback.IsPositive {
+		respondeText, err = h.GenerateResponse(
+			ctx,
+			NegativeRecommendationSystemMsg,
+			feedback.Text,
+			"recommendation_feedback",
+			"negative_recommendation_feedback",
+			req,
+			history,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		respondeText, err = h.GenerateResponse(
+			ctx,
+			PositiveRecommendationSystemMsg,
+			feedback.Text,
+			"recommendation_feedback",
+			"positive_recommendation_feedback",
+			req,
+			history,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	*history = append(*history, ConversationMessage{
+		Role:      RoleAssistant,
+		Text:      respondeText,
+		CreatedAt: time.Now().Unix(),
+		Topic:     "wine_recommendation_feedback",
+	})
+
+	msgs := []msg.ResponseMessage{
+		{
+			Message: respondeText,
+			Type:    msg.Success,
+			Options: op,
+		},
+	}
+	return msgs, nil
+}
+
 func (h *ChatCompletionHandler) callFindWine(
 	ctx context.Context,
 	wineFilter *recommend.WineFilter,
-	history *[]ConversationMessage,
+	history *ConversationMessages,
 	req *msg.Request,
 	recommendStats *monitoring.Recommendation,
 ) (responseMessages []msg.ResponseMessage, err error) {
@@ -710,6 +840,7 @@ func (h *ChatCompletionHandler) callFindWine(
 			NotFoundSystemMessage,
 			"Ничего не найдено по указанным критериям: "+wineFilter.String(),
 			"recommendation_not_found",
+			"recommendation_not_found",
 			req,
 			nil,
 		)
@@ -718,6 +849,7 @@ func (h *ChatCompletionHandler) callFindWine(
 				Role:      RoleAssistant,
 				Text:      notFoundGeneratedResp,
 				CreatedAt: time.Now().Unix(),
+				Topic:     "recommendation_not_found",
 			})
 			log.Errorf("Failed to generate not found response %v, falling back to default message", err)
 			msgs := []msg.ResponseMessage{
@@ -733,6 +865,7 @@ func (h *ChatCompletionHandler) callFindWine(
 			Role:      RoleAssistant,
 			Text:      notFoundGeneratedResp,
 			CreatedAt: time.Now().Unix(),
+			Topic:     "recommendation_not_found",
 		})
 		recommendStats.Save(ctx, h.dbConn)
 
@@ -820,7 +953,7 @@ func (h *ChatCompletionHandler) ProcessDelayedRecommendation(input json.RawMessa
 	}
 
 	for _, recommendedWine := range recommendedWines {
-		resp, err := h.generateRecommendMessageForWine(
+		resp, err := h.delayedRecommendMessageForWine(
 			context.Background(),
 			&delayedRecommendation.Request,
 			recommendedWine,
@@ -846,11 +979,11 @@ func (h *ChatCompletionHandler) ProcessDelayedRecommendation(input json.RawMessa
 	return msgs, nil
 }
 
-func (h *ChatCompletionHandler) generateRecommendMessageForWine(
+func (h *ChatCompletionHandler) delayedRecommendMessageForWine(
 	ctx context.Context,
 	req *msg.Request,
 	wineFromDb recommend.Wine,
-	history *[]ConversationMessage,
+	history *ConversationMessages,
 	recommendStats *monitoring.Recommendation,
 ) (responseMessage *msg.ResponseMessage, err error) {
 	winesJson, err := json.Marshal(wineFromDb)
@@ -863,6 +996,7 @@ func (h *ChatCompletionHandler) generateRecommendMessageForWine(
 		recommend.RememberRecommendationWineCardContext,
 		string(winesJson),
 		"wine_card",
+		"wine_recommendation",
 		req,
 		history,
 	)
@@ -906,7 +1040,7 @@ func (h *ChatCompletionHandler) generateResponseMessageForWine(
 	req *msg.Request,
 	wineFromDb recommend.Wine,
 	recommendStats *monitoring.Recommendation,
-	history *[]ConversationMessage,
+	history *ConversationMessages,
 ) (responseMessage *msg.ResponseMessage, err error) {
 	text, err := h.generateWineAnswer(ctx, recommend.WineDescriptionContext, req, wineFromDb, history)
 	if err != nil {
@@ -924,6 +1058,7 @@ func (h *ChatCompletionHandler) generateResponseMessageForWine(
 		Role:      RoleAssistant,
 		Text:      text,
 		CreatedAt: time.Now().Unix(),
+		Topic:     "wine_recommendation",
 	})
 	respMessage := &msg.ResponseMessage{
 		Message: text,
@@ -972,7 +1107,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 	systemMsg string,
 	req *msg.Request,
 	wine recommend.Wine,
-	conversationHistory *[]ConversationMessage,
+	conversationHistory *ConversationMessages,
 ) (string, error) {
 	winesJson, err := json.Marshal(wine)
 	if err != nil {
@@ -983,6 +1118,7 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 		ctx,
 		systemMsg,
 		string(winesJson),
+		"wine_card",
 		"wine_card",
 		req,
 		conversationHistory,
@@ -996,18 +1132,18 @@ func (h *ChatCompletionHandler) generateWineAnswer(
 func (h *ChatCompletionHandler) Generate(
 	ctx context.Context,
 	contextMsg,
-	message, typ string,
+	message, typ, topic string,
 	req *msg.Request,
 ) (string, error) {
-	return h.GenerateResponse(ctx, contextMsg, message, typ, req, nil)
+	return h.GenerateResponse(ctx, contextMsg, message, typ, topic, req, nil)
 }
 
 func (h *ChatCompletionHandler) GenerateResponse(
 	ctx context.Context,
 	contextMsg,
-	message, typ string,
+	message, typ, topic string,
 	req *msg.Request,
-	conversationHistory *[]ConversationMessage,
+	conversationHistory *ConversationMessages,
 ) (string, error) {
 	usageStats := &monitoring.UsageStats{
 		UserId:       req.Sender.GetID(),
@@ -1025,15 +1161,16 @@ func (h *ChatCompletionHandler) GenerateResponse(
 	}
 
 	if conversationHistory == nil {
-		conversationHistory = &[]ConversationMessage{}
+		conversationHistory = &ConversationMessages{}
 	}
 
-	winesMessage := ConversationMessage{
+	conversationMsg := ConversationMessage{
 		Role:      RoleUser,
 		Text:      message,
 		CreatedAt: time.Now().Unix(),
+		Topic:     topic,
 	}
-	*conversationHistory = append(*conversationHistory, winesMessage)
+	*conversationHistory = append(*conversationHistory, conversationMsg)
 	conversation := &Conversation{
 		ID:       req.GetConversationID(),
 		Context:  conversationContext,

@@ -96,6 +96,7 @@ func (afh *ListFavoritesHandler) generateWineDescription(
 		WineDescriptionContext,
 		w.WineTextualSummaryStr(),
 		"wine_card_favorite",
+		"wine_card_favorite",
 		req,
 	)
 	if err != nil {

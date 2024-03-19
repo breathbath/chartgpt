@@ -125,6 +125,7 @@ func (lh *LikeHandler) Handle(ctx context.Context, req *msg.Request) (*msg.Respo
 		LikeContextMessage,
 		strings.Join(userResponseMessages, "."),
 		"like_response",
+		"like_response",
 		req,
 	)
 	if err != nil {

@@ -102,6 +102,17 @@ type ConversationMessage struct {
 	Role      Role
 	Text      string
 	CreatedAt int64
+	Topic     string
+}
+
+type ConversationMessages []ConversationMessage
+
+func (cms ConversationMessages) HasLastMessageTopic(topic string) bool {
+	if len(cms) == 0 {
+		return false
+	}
+
+	return cms[len(cms)-1].Topic == topic
 }
 
 type Context struct {
@@ -128,7 +139,7 @@ func (c *Context) GetCreatedAt() int64 {
 type Conversation struct {
 	ID       string
 	Context  *Context
-	Messages []ConversationMessage
+	Messages ConversationMessages
 }
 
 func (c Conversation) ToRaw() []map[string]interface{} {
@@ -152,4 +163,22 @@ func (c Conversation) ToRaw() []map[string]interface{} {
 
 type AudioToTextResponse struct {
 	Text string `json:"text"`
+}
+
+type ToolCallRequest struct {
+	Type     string                 `json:"type"`
+	Function map[string]interface{} `json:"function"`
+}
+
+// Request see https://platform.openai.com/docs/api-reference/chat/create
+type Request struct {
+	Model       string                   `json:"model"`
+	Messages    []map[string]interface{} `json:"messages"`
+	Temperature float64                  `json:"temperature"`
+	Tools       []ToolCallRequest        `json:"tools"`
+}
+
+type RecommendationFeedback struct {
+	IsPositive bool
+	Text       string
 }

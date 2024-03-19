@@ -163,6 +163,19 @@ func ParseEnumStr(rawVal interface{}, enums []string) string {
 	return ""
 }
 
+func ParseBool(rawVal interface{}) bool {
+	if boolRes, ok := rawVal.(bool); ok {
+		return boolRes
+	}
+
+	boolStr := ParseStr(rawVal)
+	if boolStr == "" || boolStr == "false" || boolStr == "0" {
+		return false
+	}
+
+	return true
+}
+
 func ParseStr(rawVal interface{}) string {
 	if rawVal == nil {
 		return ""

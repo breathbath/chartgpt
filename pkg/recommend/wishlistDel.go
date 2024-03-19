@@ -102,6 +102,7 @@ func (afh *DeleteFromFavoritesHandler) handleSuccessCase(
 		successMsg,
 		strings.Join(responseFields, "."),
 		"delete_from_favorites_response",
+		"delete_from_favorites_response",
 		req,
 	)
 	if err != nil {

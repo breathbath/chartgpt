@@ -51,7 +51,7 @@ type ResponseGenerator interface {
 	Generate(
 		ctx context.Context,
 		contextMsg,
-		message, typ string,
+		message, typ, topic string,
 		req *msg.Request,
 	) (string, error)
 }
@@ -120,6 +120,7 @@ func (afh *AddToFavoritesHandler) handleSuccessCase(
 		ctx,
 		successMsg,
 		strings.Join(responseFields, "."),
+		"add_favorites_response",
 		"add_favorites_response",
 		req,
 	)
