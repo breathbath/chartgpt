@@ -34,8 +34,8 @@ services:
   grafana:
     image: grafana/grafana:latest
     environment:
-      - GF_SECURITY_ADMIN_USER=administr
-      - GF_SECURITY_ADMIN_PASSWORD=!$#$fdaf3134iafdfads
+      - GF_SECURITY_ADMIN_USER=administran
+      - GF_SECURITY_ADMIN_PASSWORD=dalfk-sdjk-31df03asdjf-kla
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     ports:
