@@ -98,8 +98,15 @@ func (de *DelayedMessageSender) start() {
 					continue
 				}
 
+				logrus.Debugf(
+					"Delayed message %+v under key %q, due time %v,",
+					delayedMessage,
+					key,
+					delayedMessage.DueTime,
+				)
 				if delayedMessage.DueTime.Before(time.Now().UTC()) {
 					if delayedMessage.DelayType == DelayTypeMessage {
+						logrus.Debugf("Processing delayed message under key %q", key)
 						go func() {
 							err := de.sendFunc(context.Background(), delayedMessage.SendCtx, delayedMessage.Message)
 							if err != nil {
@@ -109,6 +116,7 @@ func (de *DelayedMessageSender) start() {
 							}
 						}()
 					} else if delayedMessage.DelayType == DelayTypeCallback {
+						logrus.Debugf("Processing delayed message as callback under key %q", key)
 						go de.processDelayedCallback(delayedMessage)
 					}
 
