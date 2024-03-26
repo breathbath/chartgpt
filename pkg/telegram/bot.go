@@ -16,9 +16,10 @@ import (
 )
 
 type SendCtx struct {
-	Receiver  string
-	MessageID string
-	ChatID    int64
+	Receiver     string
+	ReceiverName string
+	MessageID    string
+	ChatID       int64
 }
 
 func (sc SendCtx) Recipient() string {
@@ -450,6 +451,12 @@ func (b *Bot) TelegramContextToSendCtx(telegramContext telebot.Context) SendCtx 
 		Receiver:  telegramContext.Sender().Recipient(),
 		MessageID: messageID,
 		ChatID:    chatID,
+		ReceiverName: fmt.Sprintf(
+			"%s %s %s",
+			telegramContext.Sender().Username,
+			telegramContext.Sender().FirstName,
+			telegramContext.Sender().LastName,
+		),
 	}
 }
 

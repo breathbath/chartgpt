@@ -99,10 +99,16 @@ func (de *DelayedMessageSender) start() {
 				}
 
 				logrus.Debugf(
-					"Delayed message %+v under key %q, due time %v,",
-					delayedMessage,
+					"Delayed message %+v under key %q, due time %v, delay type: %d, timeout: %v, receiver: %q, reciever name: %q, chat id: %q, message id: %q",
+					string(delayedMessage.DelayedCallbackInput),
 					key,
 					delayedMessage.DueTime,
+					delayedMessage.DelayType,
+					delayedMessage.Timeout,
+					delayedMessage.SendCtx.Receiver,
+					delayedMessage.SendCtx.ReceiverName,
+					delayedMessage.SendCtx.ChatID,
+					delayedMessage.SendCtx.MessageID,
 				)
 				if delayedMessage.DueTime.Before(time.Now().UTC()) {
 					if delayedMessage.DelayType == DelayTypeMessage {
